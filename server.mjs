@@ -1,0 +1,154 @@
+// 这个server将架设一个websocket服务
+// 并且通过请求连接中携带的信息，相目标创建tcp连接，实现websocket到tcp的转发
+// 请求连接使用参数?command携带账号密码、以及所要发起的tcp连接的目标地址
+
+// 设置允许的客户端信息
+const clientList = [
+  {
+    clientId: 'test1',
+    clientSecret: 'test1',
+  },
+]
+// ws的path
+const wsPath = '/connect'
+
+const httpListenPort = 3005
+
+// 由于要手动验证和升级连接，自己创建httpserver
+import {createServer} from 'http'
+import {WebSocketServer, createWebSocketStream} from 'ws'
+import {createConnection} from 'net'
+const httpServer = createServer()
+const wsServer = new WebSocketServer({noServer: true})
+
+function onSocketError(err) {
+  console.error(err)
+}
+
+wsServer.on('connection', function connection(ws, request, clientConnection) {
+  const {clientId, targetHost, targetPort} = clientConnection
+  console.info('New connection connected', {
+    clientId,
+    targetHost,
+    targetPort,
+  })
+  clientConnection.clientWsSocket = ws
+  clientConnection.clientWsSocket.on('error', console.error)
+  // 创建目标tcp连接
+  const targetTcpSocket = createConnection({
+    host: clientConnection.targetHost,
+    port: clientConnection.targetPort,
+  })
+  clientConnection.targetTcpSocket = targetTcpSocket
+  targetTcpSocket.on('error', function (err) {
+    // 出现错误，停止转发数据和ws连接
+    targetTcpSocket.end()
+    clientConnection.clientWsSocket.close()
+    clientConnection.wsStream?.end()
+    console.info(`Close all connection due to TCP error: ${err.message}`, {
+      clientId,
+      targetHost,
+      targetPort,
+    })
+  })
+  targetTcpSocket.on('connect', function () {
+    
+    console.info(`TCP connection stream created ->`, `${targetHost}:${targetPort}`)
+    // 成功创建tcp连接，开始转发数据
+    // 创建ws双工流转发数据
+    const wsStream = createWebSocketStream(ws)
+    clientConnection.wsStream = wsStream
+    wsStream.pipe(clientConnection.targetTcpSocket)
+    clientConnection.targetTcpSocket.pipe(wsStream)
+  })
+  // 监听关闭， 这里经过测试发现任意一遍关闭都会导致另一边关闭，所以只需要监听一边即可
+  // clientConnection.targetTcpSocket.on('end', ()=>{
+  //   doClose('tcp end')
+  // })
+  clientConnection.clientWsSocket.on('close', ()=>{
+    doClose('ws close')
+  })
+  function doClose(reason) {
+    // 为了保险，全部都关闭一遍
+    clientConnection.wsStream?.end()
+    clientConnection.targetTcpSocket?.end()
+    clientConnection.clientWsSocket?.close()
+    clientConnection.wsStream = null
+    clientConnection.targetTcpSocket = null
+    clientConnection.clientWsSocket = null
+    console.info(`connection closed`, {
+      clientId,
+      targetHost,
+      targetPort,
+    })
+  }
+})
+
+httpServer.on('upgrade', function upgrade(request, socket, head) {
+  // 检查wsPath（不包含query参数）
+  const path = new URL(request.url, `http://${request.headers.host}`).pathname
+  if (path !== wsPath) {
+    socket.write('HTTP/1.1 404 Not Found\r\n\r\n')
+    socket.destroy()
+    return
+  }
+  socket.on('error', onSocketError)
+  authenticate(request, function next(err, clientConnection) {
+    if (err) {
+      console.info(`[clientId:${clientConnection.clientId}]authenticate error:`, err.message)
+      socket.write(`HTTP/1.1 401 Unauthorized: ${err.message} \r\n\r\n`)
+      socket.destroy()
+      return
+    }
+    socket.removeListener('error', onSocketError)
+    wsServer.handleUpgrade(request, socket, head, function done(ws) {
+      wsServer.emit('connection', ws, request, clientConnection)
+    })
+  })
+})
+
+httpServer.listen(httpListenPort)
+console.log(`Http websocket server listen on ${httpListenPort}`)
+function authenticate(request, cb) {
+  // 从地址栏获取参数command
+  const command = new URL(request.url, `http://${request.headers.host}`).searchParams.get('command')
+  const auth = command
+  if (!auth) {
+    cb(new Error('no auth header'))
+    return
+  }
+  const [clientId, clientSecret, targetHost, targetPortSrt] = auth.split(':')
+  const targetPort = parseInt(targetPortSrt, 10)
+  const client = clientList.find(
+    c => c.clientId === clientId && c.clientSecret === clientSecret
+  )
+  const clientTemp = {clientId, clientId, targetHost, targetPort}
+  if (!client) {
+    cb(new Error('invalid client'), clientTemp)
+    return
+  }
+  // 校验端口是否为数字
+  if(isNaN(targetPort)){
+    cb(new Error('invalid target port'), clientTemp)
+    return
+  }
+  // 校验host和port是否正确
+  if (!targetHost || !targetPort) {
+    cb(new Error('invalid target'), clientTemp)
+    return
+  }
+  // port 范围校验
+  if (targetPort < 0 || targetPort > 65535) {
+    cb(new Error('invalid target port'),clientTemp)
+    return
+  }
+  cb(null, {
+    // 每次客户端发起的一个连接请求都会生成一个clientConnection
+    // 客户端id，用于后续记录
+    clientId: client.clientId,
+    targetHost,
+    targetPort,
+    targetTcpSocket: null,
+    clientWsSocket: null,
+  })
+}
