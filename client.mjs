@@ -27,6 +27,10 @@ const clientSecret = config.clientSecret
 // 本客户端的目标信息（目前一个进程只支持一个target）
 const target = config.target
 const server = config.server
+// client忽略证书错误
+const sslRejectUnauthorized = config.sslRejectUnauthorized === undefined ? 
+  false : config.sslRejectUnauthorized
+
 
 // 创建本地listen的TCP服务器
 import {createServer} from 'net'
@@ -56,15 +60,19 @@ tcpServer.on('connection', function (socket) {
     socket.end()
     return
   }
-  const ws = new WebSocket(
+  const wsUrl = 
     `${protocol}://${server.host}:${server.port}${server.path}?command=${command}`
-  )
+  // console.debug('connect url:', wsUrl, socketInfo)
+  const ws = new WebSocket(wsUrl, {
+    rejectUnauthorized: sslRejectUnauthorized
+  })
   // 出现错误，端开所有连接
   ws.on('error', err => {
     socket.end()
     wsStream?.end()
     ws.close()
     clearInterval(pingInterval)
+    console.info('ws error: ',err.message, socketInfo)
   })
   ws.on('close', () => {
     socket.end()

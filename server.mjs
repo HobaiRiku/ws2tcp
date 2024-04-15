@@ -28,12 +28,26 @@ const httpListenPort = config.httpListenPort
 
 const aesKey = config.aesKey
 
+// 直接开启wss
+const ssl = Boolean(config.ssl)
+const sslCert = config.sslCert
+const sslKey = config.sslKey
+
 // 由于要手动验证和升级连接，自己创建httpserver
 import {createServer} from 'http'
+import { createServer as createSslServer } from 'https'
 import {WebSocketServer, createWebSocketStream} from 'ws'
 import {createConnection} from 'net'
 import {aesDecrypt} from './utils/aes.mjs'
-const httpServer = createServer()
+let httpServer = createServer()
+
+if(ssl){
+  httpServer = createSslServer({
+    cert: readFileSync(sslCert, {encoding: 'utf-8'}),
+    key: readFileSync(sslKey, {encoding: 'utf-8'}),
+  })
+}
+
 const wsServer = new WebSocketServer({noServer: true})
 
 function onSocketError(err) {
@@ -136,7 +150,9 @@ httpServer.on('upgrade', function upgrade(request, socket, head) {
 })
 
 httpServer.listen(httpListenPort)
-console.log(`Http websocket server listen on ${httpListenPort}`)
+console.log(`Http websocket server listen on ${httpListenPort} ${ssl? 'with ssl': ''}`)
+
+
 function authenticate(request, cb) {
   // 从地址栏获取参数command
   const command = new URL(

@@ -5,12 +5,13 @@
     "host": "localhost",
     "port": 3005,
     "path": "/connect",
-    "wss": false,
+    "wss": true,
     "aesKey": "njpjvjkgfykgpqpcksvjydvlctgznlnz"
   },
   "target":{
     "listen": 2000,
     "targetHost": "localhost",
     "targetPort": 1000
-  }
+  },
+  "sslRejectUnauthorized": true
 }
