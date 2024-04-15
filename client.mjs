@@ -30,33 +30,49 @@ const server = config.server
 
 // 创建本地listen的TCP服务器
 import {createServer} from 'net'
-import WebSocket, {createWebSocketStream} from 'ws';
+import WebSocket, {createWebSocketStream} from 'ws'
+import {aesEncrypt} from './utils/aes.mjs'
 
 // 注意需要暂停读取连接传输数据，等待ws连接建立
 const tcpServer = createServer({pauseOnConnect: true})
 
 tcpServer.on('connection', function (socket) {
-  console.info('New connection connected')
+  const socketInfo = {
+    ip: socket.remoteAddress,
+  }
+  console.info(`New connection connected`, socketInfo)
   // 创建ws连接
   const protocol = server.wss ? 'wss' : 'ws'
   let wsStream
   // 需要定时ping，否则NAT设备会断开ws的长连接
   let pingInterval
-  const ws = new WebSocket(`${protocol}://${server.host}:${server.port}${server.path}?command=${clientId}:${clientSecret}:${target.targetHost}:${target.targetPort}`)
-  // 出现错误，端开所有连接
-  ws.on('error', (err)=>{
+  const auth = `${clientId}:${clientSecret}:${target.targetHost}:${target.targetPort}`
+  let command = ''
+  try {
+    command = aesEncrypt(auth, server.aesKey)
+    command = encodeURIComponent(command)
+  } catch (err) {
+    console.error('Decrypt auth error:', err.message, socketInfo)
     socket.end()
-    wsStream.end()
+    return
+  }
+  const ws = new WebSocket(
+    `${protocol}://${server.host}:${server.port}${server.path}?command=${command}`
+  )
+  // 出现错误，端开所有连接
+  ws.on('error', err => {
+    socket.end()
+    wsStream?.end()
     ws.close()
     clearInterval(pingInterval)
   })
-  ws.on('close', ()=>{
+  ws.on('close', () => {
     socket.end()
     wsStream?.end()
     clearInterval(pingInterval)
-    console.info('Close connection due to ws close')
+    console.info('Close connection due to ws close', socketInfo)
   })
-  ws.on('open', ()=>{
+  ws.on('open', () => {
     // 通过ws创建双工流
     wsStream = createWebSocketStream(ws)
     // 将socket的数据流导入wsStream
@@ -64,25 +80,24 @@ tcpServer.on('connection', function (socket) {
     // 恢复socket的数据流
     socket.resume()
     // 定时ping
-    pingInterval = setInterval(()=>{
+    pingInterval = setInterval(() => {
       ws.ping()
     }, 20_000)
   })
-  socket.on('error', (err)=>{
+  socket.on('error', err => {
     wsStream?.end()
     socket.end()
     ws.close()
     clearInterval(pingInterval)
-    console.info('Close connection due to socket error', err.message)
+    console.info('Close connection due to socket error', err.message, socketInfo)
   })
-  socket.on('end', ()=>{
+  socket.on('end', () => {
     wsStream?.end()
     socket.end()
     ws.close()
     clearInterval(pingInterval)
-    console.info('Close connection due to socket end')
+    console.info('Close connection due to socket end', socketInfo)
   })
-  
 })
 
 tcpServer.listen(target.listen, function () {

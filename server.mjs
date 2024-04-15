@@ -2,22 +2,37 @@
 // 并且通过请求连接中携带的信息，相目标创建tcp连接，实现websocket到tcp的转发
 // 请求连接使用参数?command携带账号密码、以及所要发起的tcp连接的目标地址
 
-// 设置允许的客户端信息
-const clientList = [
-  {
-    clientId: 'test1',
-    clientSecret: 'test1',
-  },
-]
-// ws的path
-const wsPath = '/connect'
+// 获取-c后面的参数
+const args = process.argv.slice(2)
+const configFilePath = args[1]
+if (!configFilePath) {
+  console.error('Need config file')
+  process.exit(1)
+}
+// 读取配置文件
+import {readFileSync} from 'fs'
+let config
+try {
+  config = JSON.parse(readFileSync(configFilePath, 'utf-8'))
+} catch (err) {
+  console.error('Read config file error:', err.message)
+  process.exit(1)
+}
 
-const httpListenPort = 3005
+// 设置允许的客户端信息
+const clientList = config.clientList
+// ws的path
+const wsPath = config.wsPath
+
+const httpListenPort = config.httpListenPort
+
+const aesKey = config.aesKey
 
 // 由于要手动验证和升级连接，自己创建httpserver
 import {createServer} from 'http'
 import {WebSocketServer, createWebSocketStream} from 'ws'
 import {createConnection} from 'net'
+import {aesDecrypt} from './utils/aes.mjs'
 const httpServer = createServer()
 const wsServer = new WebSocketServer({noServer: true})
 
@@ -26,9 +41,10 @@ function onSocketError(err) {
 }
 
 wsServer.on('connection', function connection(ws, request, clientConnection) {
-  const {clientId, targetHost, targetPort} = clientConnection
+  const {clientId, targetHost, targetPort, clientIp} = clientConnection
   console.info('New connection connected', {
     clientId,
+    clientIp,
     targetHost,
     targetPort,
   })
@@ -47,13 +63,16 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
     clientConnection.wsStream?.end()
     console.info(`Close all connection due to TCP error: ${err.message}`, {
       clientId,
+      clientIp,
       targetHost,
       targetPort,
     })
   })
   targetTcpSocket.on('connect', function () {
-    
-    console.info(`TCP connection stream created ->`, `${targetHost}:${targetPort}`)
+    console.info(
+      `TCP connection stream created ->`,
+      `${targetHost}:${targetPort}`
+    )
     // 成功创建tcp连接，开始转发数据
     // 创建ws双工流转发数据
     const wsStream = createWebSocketStream(ws)
@@ -65,7 +84,7 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
   // clientConnection.targetTcpSocket.on('end', ()=>{
   //   doClose('tcp end')
   // })
-  clientConnection.clientWsSocket.on('close', ()=>{
+  clientConnection.clientWsSocket.on('close', () => {
     doClose('ws close')
   })
   function doClose(reason) {
@@ -78,6 +97,7 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
     clientConnection.clientWsSocket = null
     console.info(`connection closed`, {
       clientId,
+      clientIp,
       targetHost,
       targetPort,
     })
@@ -93,9 +113,17 @@ httpServer.on('upgrade', function upgrade(request, socket, head) {
     return
   }
   socket.on('error', onSocketError)
+
+  // 校验连接参数
   authenticate(request, function next(err, clientConnection) {
+    clientConnection.clientIp = socket.remoteAddress
+    const {clientId, clientIp} = clientConnection
+    let clientInfo = `[clientId: ${clientId || 'unknown'}, clientIp: ${clientIp}]`
     if (err) {
-      console.info(`[clientId:${clientConnection.clientId}]authenticate error:`, err.message)
+      console.info(
+        `${clientInfo} authenticate error:`,
+        err.message
+      )
       socket.write(`HTTP/1.1 401 Unauthorized: ${err.message} \r\n\r\n`)
       socket.destroy()
       return
@@ -111,10 +139,22 @@ httpServer.listen(httpListenPort)
 console.log(`Http websocket server listen on ${httpListenPort}`)
 function authenticate(request, cb) {
   // 从地址栏获取参数command
-  const command = new URL(request.url, `http://${request.headers.host}`).searchParams.get('command')
-  const auth = command
+  const command = new URL(
+    request.url,
+    `http://${request.headers.host}`
+  ).searchParams.get('command')
+  const clientTemp = {
+  }
+  // 解密参数
+  let auth = ''
+  try {
+    auth = aesDecrypt(decodeURIComponent(command), aesKey)
+  } catch (err) {
+    cb(new Error('decrypt command error'), clientTemp)
+    return;
+  }
   if (!auth) {
-    cb(new Error('no auth header'))
+    cb(new Error('no auth info'), clientTemp)
     return
   }
   const [clientId, clientSecret, targetHost, targetPortSrt] = auth.split(':')
@@ -122,13 +162,16 @@ function authenticate(request, cb) {
   const client = clientList.find(
     c => c.clientId === clientId && c.clientSecret === clientSecret
   )
-  const clientTemp = {clientId, clientId, targetHost, targetPort}
+
+  // 追加client信息
+  Object.assign(clientTemp, {clientId, clientId, targetHost, targetPort,})
+
   if (!client) {
     cb(new Error('invalid client'), clientTemp)
     return
   }
   // 校验端口是否为数字
-  if(isNaN(targetPort)){
+  if (isNaN(targetPort)) {
     cb(new Error('invalid target port'), clientTemp)
     return
   }
@@ -139,7 +182,7 @@ function authenticate(request, cb) {
   }
   // port 范围校验
   if (targetPort < 0 || targetPort > 65535) {
-    cb(new Error('invalid target port'),clientTemp)
+    cb(new Error('invalid target port'), clientTemp)
     return
   }
   cb(null, {

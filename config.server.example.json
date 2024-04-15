@@ -1,0 +1,11 @@
+{
+  "clientList": [
+    {
+      "clientId": "test1",
+      "clientSecret": "test1"
+    }
+  ],
+  "wsPath": "/connect",
+  "httpListenPort": 3005,
+  "aesKey": "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+}
