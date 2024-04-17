@@ -118,6 +118,21 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
   }
 })
 
+// 其他请求，返回404
+httpServer.on('request', function request(req, res) {
+  // 不是upgrade请求且不是wsPath，返回404
+  const path = new URL(req.url, `http://${req.headers.host}`).pathname
+  const isUpgrade = req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket'
+  if (path !== wsPath || !isUpgrade) {
+    res.writeHead(404);
+    res.end(JSON.stringify({
+      msg: 'Not found',
+      code: 404
+    }));
+  }
+})
+
+
 httpServer.on('upgrade', function upgrade(request, socket, head) {
   // 检查wsPath（不包含query参数）
   const path = new URL(request.url, `http://${request.headers.host}`).pathname
@@ -201,7 +216,7 @@ function authenticate(request, cb) {
     cb(new Error('invalid target port'), clientTemp)
     return
   }
-  cb(null, {
+  cb(null, Object.assign(clientTemp, {
     // 每次客户端发起的一个连接请求都会生成一个clientConnection
     // 客户端id，用于后续记录
     clientId: client.clientId,
@@ -209,5 +224,5 @@ function authenticate(request, cb) {
     targetPort,
     targetTcpSocket: null,
     clientWsSocket: null,
-  })
+  }))
 }
