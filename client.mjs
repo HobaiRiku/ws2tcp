@@ -50,7 +50,10 @@ tcpServer.on('connection', function (socket) {
   let wsStream
   // 需要定时ping，否则NAT设备会断开ws的长连接
   let pingInterval
-  const auth = `${clientId}:${clientSecret}:${target.targetHost}:${target.targetPort}`
+  // 添加一个随机字符串作为clientConnectionId，这个将会在server端进行保存，断开时清除
+  // 确保clientConnectionId的唯一性阻止重放攻击
+  const clientConnectionId = Math.random().toString(36).slice(2)
+  const auth = `${clientId}:${clientSecret}:${target.targetHost}:${target.targetPort}:${clientConnectionId}`
   let command = ''
   try {
     command = aesEncrypt(auth, server.aesKey)

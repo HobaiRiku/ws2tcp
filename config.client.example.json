@@ -5,7 +5,7 @@
     "host": "localhost",
     "port": 3005,
     "path": "/connect",
-    "wss": true,
+    "wss": false,
     "aesKey": "njpjvjkgfykgpqpcksvjydvlctgznlnz"
   },
   "target":{

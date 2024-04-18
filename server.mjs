@@ -41,6 +41,8 @@ import {createConnection} from 'net'
 import {aesDecrypt} from './utils/aes.mjs'
 let httpServer = createServer()
 
+// 每次ws请求都进行保存，并且连接时判断唯一性，确保断开后清除，目的是防止重放攻击
+const clientConnectionIdList = []
 if(ssl){
   httpServer = createSslServer({
     cert: readFileSync(sslCert, {encoding: 'utf-8'}),
@@ -62,6 +64,8 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
     targetHost,
     targetPort,
   })
+  // 保存clientConnectionId
+  clientConnectionIdList.push(clientConnection.clientConnectionId)
   clientConnection.clientWsSocket = ws
   clientConnection.clientWsSocket.on('error', console.error)
   // 创建目标tcp连接
@@ -81,6 +85,7 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
       targetHost,
       targetPort,
     })
+    removeClientConnectionId(clientConnection.clientConnectionId)
   })
   targetTcpSocket.on('connect', function () {
     console.info(
@@ -115,6 +120,7 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
       targetHost,
       targetPort,
     })
+    removeClientConnectionId(clientConnection.clientConnectionId)
   }
 })
 
@@ -132,6 +138,12 @@ httpServer.on('request', function request(req, res) {
   }
 })
 
+function removeClientConnectionId(clientConnectionId) {
+  const index = clientConnectionIdList.indexOf(clientConnectionId)
+  if (index >= 0) {
+    clientConnectionIdList.splice(index, 1)
+  }
+}
 
 httpServer.on('upgrade', function upgrade(request, socket, head) {
   // 检查wsPath（不包含query参数）
@@ -188,17 +200,22 @@ function authenticate(request, cb) {
     cb(new Error('no auth info'), clientTemp)
     return
   }
-  const [clientId, clientSecret, targetHost, targetPortSrt] = auth.split(':')
+  const [clientId, clientSecret, targetHost, targetPortSrt, clientConnectionId] = auth.split(':')
   const targetPort = parseInt(targetPortSrt, 10)
   const client = clientList.find(
     c => c.clientId === clientId && c.clientSecret === clientSecret
   )
 
   // 追加client信息
-  Object.assign(clientTemp, {clientId, clientId, targetHost, targetPort,})
+  Object.assign(clientTemp, {clientId, clientId, targetHost, targetPort,clientConnectionId})
 
   if (!client) {
     cb(new Error('invalid client'), clientTemp)
+    return
+  }
+  // 校验clientConnectionId
+  if (clientConnectionIdList.includes(clientConnectionId)) {
+    cb(new Error('clientConnectionId already exists'), clientTemp)
     return
   }
   // 校验端口是否为数字
@@ -224,5 +241,6 @@ function authenticate(request, cb) {
     targetPort,
     targetTcpSocket: null,
     clientWsSocket: null,
+    clientConnectionId
   }))
 }
