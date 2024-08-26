@@ -37,10 +37,18 @@ import {createServer} from 'net'
 import WebSocket, {createWebSocketStream} from 'ws'
 import {aesEncrypt} from './utils/aes.mjs'
 
-// 注意需要暂停读取连接传输数据，等待ws连接建立
-const tcpServer = createServer({pauseOnConnect: true})
+const tcpServer = createServer()
 
 tcpServer.on('connection', function (socket) {
+  let wsStreamUp = false;
+  const beforeWsStreamUpDataCache = []
+  let ws;
+  socket.on('data', function (data) {
+    if (wsStreamUp) {
+      return;
+    }
+    beforeWsStreamUpDataCache.push(data)
+  })
   const socketInfo = {
     ip: socket.remoteAddress,
   }
@@ -66,7 +74,7 @@ tcpServer.on('connection', function (socket) {
   const wsUrl = 
     `${protocol}://${server.host}:${server.port}${server.path}?command=${command}`
   // console.debug('connect url:', wsUrl, socketInfo)
-  const ws = new WebSocket(wsUrl, {
+  ws = new WebSocket(wsUrl, {
     rejectUnauthorized: sslRejectUnauthorized
   })
   // 出现错误，端开所有连接
@@ -84,16 +92,24 @@ tcpServer.on('connection', function (socket) {
     console.info('Close connection due to ws close', socketInfo)
   })
   ws.on('open', () => {
-    // 通过ws创建双工流
-    wsStream = createWebSocketStream(ws)
-    // 将socket的数据流导入wsStream
-    socket.pipe(wsStream).pipe(socket)
-    // 恢复socket的数据流
-    socket.resume()
     // 定时ping
     pingInterval = setInterval(() => {
       ws.ping()
     }, 20_000)
+  })
+  // 监听消息是否收到streamUp，收到后开始转发数据
+  ws.on('message', message => {
+    if (message.toString() === 'streamUp') {
+      console.info('ws streamUp message found, start pipe', socketInfo)
+      wsStream = createWebSocketStream(ws)
+      wsStreamUp = true
+      wsStream.pipe(socket)
+      // 发送之前缓存的数据
+      while (beforeWsStreamUpDataCache.length) {
+        ws.send(beforeWsStreamUpDataCache.shift())
+      }
+      socket.pipe(wsStream)
+    }
   })
   socket.on('error', err => {
     wsStream?.end()

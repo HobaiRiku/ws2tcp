@@ -98,6 +98,8 @@ wsServer.on('connection', function connection(ws, request, clientConnection) {
     clientConnection.wsStream = wsStream
     wsStream.pipe(clientConnection.targetTcpSocket)
     clientConnection.targetTcpSocket.pipe(wsStream)
+    // 告知客户端可以开始pipe了
+    ws.send('streamUp')
   })
   // 监听关闭， 这里经过测试发现任意一遍关闭都会导致另一边关闭，所以只需要监听一边即可
   // clientConnection.targetTcpSocket.on('end', ()=>{
