@@ -57,72 +57,74 @@ function onSocketError(err) {
 }
 
 wsServer.on('connection', function connection(ws, request, clientConnection) {
-  const {clientId, targetHost, targetPort, clientIp} = clientConnection
-  console.info('New connection connected', {
+  const { clientId, targetHost, targetPort, clientIp } = clientConnection;
+  console.info("New connection connected", {
     clientId,
     clientIp,
     targetHost,
     targetPort,
-  })
+  });
   // 保存clientConnectionId
-  clientConnectionIdList.push(clientConnection.clientConnectionId)
-  clientConnection.clientWsSocket = ws
-  clientConnection.clientWsSocket.on('error', console.error)
+  clientConnectionIdList.push(clientConnection.clientConnectionId);
+  clientConnection.clientWsSocket = ws;
+  clientConnection.clientWsSocket.on("error", console.error);
+  // 创建ws双工流转发数据
+  const wsStream = createWebSocketStream(ws);
+  clientConnection.wsStream = wsStream;
   // 创建目标tcp连接
   const targetTcpSocket = createConnection({
     host: clientConnection.targetHost,
     port: clientConnection.targetPort,
-  })
-  clientConnection.targetTcpSocket = targetTcpSocket
-  targetTcpSocket.on('error', function (err) {
+  });
+  clientConnection.targetTcpSocket = targetTcpSocket;
+  // 设定pipe
+  wsStream.pipe(clientConnection.targetTcpSocket);
+  clientConnection.targetTcpSocket.pipe(wsStream);
+
+  targetTcpSocket.on("error", function (err) {
     // 出现错误，停止转发数据和ws连接
-    targetTcpSocket.end()
-    clientConnection.clientWsSocket.close()
-    clientConnection.wsStream?.end()
+    targetTcpSocket.end();
+    clientConnection.clientWsSocket.close();
+    clientConnection.wsStream?.end();
     console.info(`Close all connection due to TCP error: ${err.message}`, {
       clientId,
       clientIp,
       targetHost,
       targetPort,
-    })
-    removeClientConnectionId(clientConnection.clientConnectionId)
-  })
-  targetTcpSocket.on('connect', function () {
+    });
+    removeClientConnectionId(clientConnection.clientConnectionId);
+  });
+  targetTcpSocket.on("connect", function () {
     console.info(
       `TCP connection stream created ->`,
       `${targetHost}:${targetPort}`
-    )
+    );
     // 成功创建tcp连接，开始转发数据
-    // 创建ws双工流转发数据
-    const wsStream = createWebSocketStream(ws)
-    clientConnection.wsStream = wsStream
-    wsStream.pipe(clientConnection.targetTcpSocket)
-    clientConnection.targetTcpSocket.pipe(wsStream)
     // 告知客户端可以开始pipe了
-    ws.send('streamUp')
-  })
+    ws.send("streamUp");
+  });
   // 监听关闭， 这里经过测试发现任意一遍关闭都会导致另一边关闭，所以只需要监听一边即可
   // clientConnection.targetTcpSocket.on('end', ()=>{
   //   doClose('tcp end')
   // })
-  clientConnection.clientWsSocket.on('close', () => {
-    doClose('ws close')
-  })
+  clientConnection.clientWsSocket.on("close", () => {
+    doClose("ws close");
+  });
   function doClose(reason) {
     // 为了保险，全部都关闭一遍
-    clientConnection.wsStream?.end()
-    clientConnection.targetTcpSocket?.end()
-    clientConnection.clientWsSocket?.close()
-    clientConnection.wsStream = null
-    clientConnection.targetTcpSocket = null
-    clientConnection.clientWsSocket = null
+    clientConnection.wsStream?.end();
+    clientConnection.targetTcpSocket?.end();
+    clientConnection.clientWsSocket?.close();
+    clientConnection.wsStream = null;
+    clientConnection.targetTcpSocket = null;
+    clientConnection.clientWsSocket = null;
     console.info(`connection closed`, {
       clientId,
       clientIp,
       targetHost,
       targetPort,
-    })
-    removeClientConnectionId(clientConnection.clientConnectionId)
+    });
+    removeClientConnectionId(clientConnection.clientConnectionId);
   }
 })
 
