@@ -37,18 +37,10 @@ import {createServer} from 'net'
 import WebSocket, {createWebSocketStream} from 'ws'
 import {aesEncrypt} from './utils/aes.mjs'
 
-const tcpServer = createServer()
+const tcpServer = createServer({pauseOnConnect: true})
 
 tcpServer.on('connection', function (socket) {
-  let wsStreamUp = false;
-  const beforeWsStreamUpDataCache = []
   let ws;
-  socket.on('data', function (data) {
-    if (wsStreamUp) {
-      return;
-    }
-    beforeWsStreamUpDataCache.push(data)
-  })
   const socketInfo = {
     ip: socket.remoteAddress,
   }
@@ -102,13 +94,9 @@ tcpServer.on('connection', function (socket) {
     if (message.toString() === 'streamUp') {
       console.info('ws streamUp message found, start pipe', socketInfo)
       wsStream = createWebSocketStream(ws)
-      wsStreamUp = true
       wsStream.pipe(socket)
-      // 发送之前缓存的数据
-      while (beforeWsStreamUpDataCache.length) {
-        ws.send(beforeWsStreamUpDataCache.shift())
-      }
       socket.pipe(wsStream)
+      socket.resume()
     }
   })
   socket.on('error', err => {
