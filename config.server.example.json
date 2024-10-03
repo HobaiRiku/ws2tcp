@@ -10,5 +10,6 @@
   "aesKey": "njpjvjkgfykgpqpcksvjydvlctgznlnz",
   "ssl": false,
   "sslKey": "key.pem",
-  "sslCert": "cert.pem"
+  "sslCert": "cert.pem",
+  "useEncryption": true
 }
