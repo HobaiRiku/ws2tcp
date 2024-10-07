@@ -99,11 +99,29 @@ tcpServer.on("connection", function (socket) {
   });
   // 监听消息是否收到streamUp，收到后开始转发数据
   const onMessage = (message) => {
+    wsStream = createWebSocketStream(ws);
+    function startDirect(){
+      wsStream.pipe(socket).pipe(wsStream);
+      socket.resume();
+      console.info(
+        "ws streamUp message found, start pipe (useOldStreamUp)",
+        socketInfo
+      );
+      removeOnMessage();
+    }
+    // 兼容旧版本streamUp
+    let useOldStreamUp = false;
+    if(message.toString() === 'streamUp') {
+      useOldStreamUp = true; 
+    }
+    if(useOldStreamUp){
+      startDirect()
+      return;
+    }
     const decryptMessage = aesDecrypt(message.toString(), server.aesKey, {
       toString: false,
     });
     const streamUpFrame = parseStreamUpFrame(decryptMessage);
-    wsStream = createWebSocketStream(ws);
     if (streamUpFrame.useEncrypt) {
       // 创建调试层
       // const debugIncoming = new DebugStream("Incoming");
@@ -142,13 +160,7 @@ tcpServer.on("connection", function (socket) {
         clearInterval(pingInterval);
       });
     } else {
-      wsStream.pipe(socket).pipe(wsStream);
-      socket.resume();
-      console.info(
-        "ws streamUpFrame found, start pipe (use encrypt: false)",
-        socketInfo
-      );
-      removeOnMessage();
+      startDirect()
     }
   };
   // remove onMessage
