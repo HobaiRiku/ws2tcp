@@ -103,10 +103,6 @@ tcpServer.on("connection", function (socket) {
     function startDirect(){
       wsStream.pipe(socket).pipe(wsStream);
       socket.resume();
-      console.info(
-        "ws streamUp message found, start pipe (useOldStreamUp)",
-        socketInfo
-      );
       removeOnMessage();
     }
     // 兼容旧版本streamUp
@@ -116,6 +112,10 @@ tcpServer.on("connection", function (socket) {
     }
     if(useOldStreamUp){
       startDirect()
+      console.info(
+        "ws streamUp message found, start pipe (useOldStreamUp)",
+        socketInfo
+      );
       return;
     }
     const decryptMessage = aesDecrypt(message.toString(), server.aesKey, {
@@ -161,6 +161,10 @@ tcpServer.on("connection", function (socket) {
       });
     } else {
       startDirect()
+      console.info(
+        "ws streamUpFrame found, start pipe (use encrypt: false)",
+        socketInfo
+      );
     }
   };
   // remove onMessage
