@@ -39,7 +39,7 @@ export const aesDecrypt = (data, key, options) => {
 // 创建streamUp桢,[0x01,0x01,0x01]代表不使用端对端加密，[0x01,0x01,0x02]代表使用端对端加密
 export const createStreamUpFrame = (useEncrypt, key) => {
   const frameHeader = Buffer.from([0x01, 0x01, useEncrypt ? 0x02 : 0x01])
-  // 桢身体代表将要使用的传输数据aes加密的key和iv
+  // 桢身体代表将要使用的传输数据aes加密的key（iv在具体传输数据包中携带）
   if(!useEncrypt) {
     return frameHeader
   }
@@ -58,7 +58,7 @@ export const parseStreamUpFrame = (frame) => {
       useEncrypt
     } 
   }
-  // 解析key和iv
+  // 解析key
   const key = frame.slice(3, 35)
   return {
     useEncrypt,
@@ -91,7 +91,7 @@ export class EncryptStream extends Transform {
 
   _transform(chunk, encoding, callback) {
     let offset = 0;
-    const maxChunkSize = 65535 - 16; // 最大数据块大小，减去 IV 的长度
+    const maxChunkSize = 65534 - 16; // 最大数据块大小，减去 IV 的长度
 
     while (offset < chunk.length) {
       const end = Math.min(offset + maxChunkSize, chunk.length);
