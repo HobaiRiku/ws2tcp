@@ -23,8 +23,12 @@ try {
 const clientList = config.clientList;
 // ws的path
 const wsPath = config.wsPath;
+// ws的host校验
+const wsHost = config.wsHost;
 
 const httpListenPort = config.httpListenPort;
+// 监听地址，默认127.0.0.1
+const httpListenAddress = config.httpListenAddress || "127.0.0.1";
 
 const aesKey = config.aesKey;
 
@@ -196,12 +200,27 @@ function removeClientConnectionId(clientConnectionId) {
 
 httpServer.on("upgrade", function upgrade(request, socket, head) {
   // 检查wsPath（不包含query参数）
-  const path = new URL(request.url, `http://${request.headers.host}`).pathname;
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  const path = url.pathname;
   if (path !== wsPath) {
     socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
     socket.destroy();
     return;
   }
+
+  // 检查wsHost（如果配置了的话）
+  if (wsHost && wsHost.trim() !== "") {
+    const requestHost = request.headers.host;
+    // 去掉端口号进行比较
+    const hostWithoutPort = requestHost ? requestHost.split(':')[0] : '';
+    if (hostWithoutPort !== wsHost) {
+      console.info(`Host validation failed: expected ${wsHost}, got ${hostWithoutPort}`);
+      socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+  }
+
   socket.on("error", onSocketError);
 
   // 校验连接参数
@@ -224,9 +243,9 @@ httpServer.on("upgrade", function upgrade(request, socket, head) {
   });
 });
 
-httpServer.listen(httpListenPort);
+httpServer.listen(httpListenPort, httpListenAddress);
 console.log(
-  `Http websocket server listen on ${httpListenPort} ${ssl ? "with ssl" : ""}`
+  `Http websocket server listen on ${httpListenAddress}:${httpListenPort} ${ssl ? "with ssl" : ""}`
 );
 
 function authenticate(request, cb) {

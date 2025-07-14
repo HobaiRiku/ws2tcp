@@ -6,7 +6,9 @@
     }
   ],
   "wsPath": "/connect",
+  "wsHost": "localhost",
   "httpListenPort": 3005,
+  "httpListenAddress": "localhost",
   "aesKey": "njpjvjkgfykgpqpcksvjydvlctgznlnz",
   "ssl": false,
   "sslKey": "key.pem",
