@@ -91,7 +91,7 @@ export class EncryptStream extends Transform {
 
   _transform(chunk, encoding, callback) {
     let offset = 0;
-    const maxChunkSize = 65534 - 16; // 最大数据块大小，减去 IV 的长度
+    const maxChunkSize = 32768 - 16 - 1; // 最大数据块大小，减去 IV 的长度
 
     while (offset < chunk.length) {
       const end = Math.min(offset + maxChunkSize, chunk.length);
