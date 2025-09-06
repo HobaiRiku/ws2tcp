@@ -86,6 +86,10 @@ wsServer.on("connection", function connection(ws, request, clientConnection) {
   // 创建ws双工流转发数据
   const wsStream = createWebSocketStream(ws);
   clientConnection.wsStream = wsStream;
+  // 增加 wsStream error 事件监听，防止未捕获异常
+  wsStream.on("error", (err) => {
+    console.error("wsStream error:", err);
+  });
   // 创建目标tcp连接
   const targetTcpSocket = createConnection({
     host: clientConnection.targetHost,
@@ -147,7 +151,11 @@ wsServer.on("connection", function connection(ws, request, clientConnection) {
     );
     // 成功创建tcp连接，开始转发数据
     // 告知客户端可以开始pipe了
-    ws.send(aesEncrypt(streamUpFrame, aesKey));
+    if (ws.readyState === ws.OPEN) {
+      ws.send(aesEncrypt(streamUpFrame, aesKey));
+    } else {
+      console.warn("WebSocket not open, cannot send streamUpFrame");
+    }
   });
   // 监听关闭， 这里经过测试发现任意一遍关闭都会导致另一边关闭，所以只需要监听一边即可
   // clientConnection.targetTcpSocket.on('end', ()=>{
