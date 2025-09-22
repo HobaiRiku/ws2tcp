@@ -72,10 +72,14 @@ tcpServer.on("connection", function (socket) {
     socket.end();
     return;
   }
-  const wsUrl = `${protocol}://${server.host}:${server.port}${server.path}?command=${command}`;
+  const wsUrl = `${protocol}://${server.ip || server.host}:${server.port}${server.path}?command=${command}`;
   // console.debug('connect url:', wsUrl, socketInfo)
   ws = new WebSocket(wsUrl, {
     rejectUnauthorized: sslRejectUnauthorized,
+    origin: `${protocol}://${server.host}:${server.port}`,
+    headers:{
+      Host: server.host
+    }
   });
   // 出现错误，端开所有连接
   ws.on("error", (err) => {
