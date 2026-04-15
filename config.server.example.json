@@ -9,6 +9,7 @@
   "wsHost": "localhost",
   "httpListenPort": 3005,
   "httpListenAddress": "localhost",
+  "trustProxy": true,
   "aesKey": "njpjvjkgfykgpqpcksvjydvlctgznlnz",
   "ssl": false,
   "sslKey": "key.pem",

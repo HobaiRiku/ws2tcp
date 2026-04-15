@@ -30,6 +30,9 @@ const httpListenPort = config.httpListenPort;
 // 监听地址，默认127.0.0.1
 const httpListenAddress = config.httpListenAddress || "127.0.0.1";
 
+// 是否信任反向代理转发的客户端 IP 请求头，默认不信任
+const trustProxy = Boolean(config.trustProxy);
+
 const aesKey = config.aesKey;
 
 // 是否启用端对端加密，默认启用加密
@@ -69,6 +72,33 @@ const wsServer = new WebSocketServer({ noServer: true });
 
 function onSocketError(err) {
   console.error(err);
+}
+
+function normalizeIp(ip) {
+  if (!ip) {
+    return "";
+  }
+  const normalizedIp = ip.split(",")[0].trim();
+  if (normalizedIp.startsWith("::ffff:")) {
+    return normalizedIp.slice(7);
+  }
+  return normalizedIp;
+}
+
+function getClientIp(request, socket) {
+  if (trustProxy) {
+    const forwardedFor = request.headers["x-forwarded-for"];
+    const realIp = request.headers["x-real-ip"];
+    const forwardedForValue = Array.isArray(forwardedFor)
+      ? forwardedFor[0]
+      : forwardedFor;
+    const realIpValue = Array.isArray(realIp) ? realIp[0] : realIp;
+    const proxyClientIp = normalizeIp(forwardedForValue) || normalizeIp(realIpValue);
+    if (proxyClientIp) {
+      return proxyClientIp;
+    }
+  }
+  return normalizeIp(socket.remoteAddress);
 }
 
 wsServer.on("connection", function connection(ws, request, clientConnection) {
@@ -233,7 +263,7 @@ httpServer.on("upgrade", function upgrade(request, socket, head) {
 
   // 校验连接参数
   authenticate(request, function next(err, clientConnection) {
-    clientConnection.clientIp = socket.remoteAddress;
+    clientConnection.clientIp = getClientIp(request, socket);
     const { clientId, clientIp } = clientConnection;
     let clientInfo = `[clientId: ${
       clientId || "unknown"
