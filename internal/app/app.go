@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/client"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/server"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/paths"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/core/client"
+	"websocket2Tcp/internal/core/server"
+	"websocket2Tcp/internal/paths"
+	"websocket2Tcp/internal/services"
 )
 
 // Options bundles the inputs Run needs. Built by cmd/ from CLI flags.

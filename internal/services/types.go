@@ -9,7 +9,7 @@ package services
 import (
 	"net/netip"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/config"
 )
 
 // Identity is the parsed, runtime form of one server-side client (a "user").

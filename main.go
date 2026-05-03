@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/cmd"
-	hostservice "gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/service"
+	"websocket2Tcp/cmd"
+	hostservice "websocket2Tcp/internal/service"
 )
 
 func main() {

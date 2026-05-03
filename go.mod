@@ -1,4 +1,4 @@
-module gitlab.hobairiku.site/hobairiku/websocket2Tcp
+module websocket2Tcp
 
 go 1.23.0
 

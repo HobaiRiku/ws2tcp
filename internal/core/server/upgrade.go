@@ -12,11 +12,11 @@ import (
 
 	"github.com/coder/websocket"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/crypto"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/frame"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/wsproxy"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/core/crypto"
+	"websocket2Tcp/internal/core/frame"
+	"websocket2Tcp/internal/core/wsproxy"
+	"websocket2Tcp/internal/services"
 )
 
 // dialTimeout is the upper bound for the inner TCP dial; intentionally

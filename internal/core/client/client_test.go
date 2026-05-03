@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/config"
 )
 
 func TestBuildWSURL(t *testing.T) {

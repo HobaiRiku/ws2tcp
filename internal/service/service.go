@@ -10,10 +10,10 @@ import (
 
 	kservice "github.com/kardianos/service"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/app"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/log"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/paths"
+	"websocket2Tcp/internal/app"
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/log"
+	"websocket2Tcp/internal/paths"
 )
 
 const (

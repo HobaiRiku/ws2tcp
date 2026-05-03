@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"sync"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/services"
 )
 
 // Manager supervises N tunnels in one process. It owns one cancellable

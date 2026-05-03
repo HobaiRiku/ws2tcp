@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/client"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/server"
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/core/client"
+	"websocket2Tcp/internal/core/server"
+	"websocket2Tcp/internal/services"
 )
 
 const k32 = "njpjvjkgfykgpqpcksvjydvlctgznlnz"

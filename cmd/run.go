@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	hostservice "gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/service"
+	hostservice "websocket2Tcp/internal/service"
 )
 
 func runCmd() *cobra.Command {

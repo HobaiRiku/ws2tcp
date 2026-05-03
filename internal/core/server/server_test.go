@@ -4,7 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/crypto"
+	"websocket2Tcp/internal/core/crypto"
 )
 
 const k32 = "njpjvjkgfykgpqpcksvjydvlctgznlnz"

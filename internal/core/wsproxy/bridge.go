@@ -12,7 +12,7 @@ import (
 	"io"
 	"net"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/crypto"
+	"websocket2Tcp/internal/core/crypto"
 )
 
 // Bridge runs bidirectional io.Copy between ws and tcp until either side

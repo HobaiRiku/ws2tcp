@@ -5,7 +5,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/config"
 )
 
 const k32 = "njpjvjkgfykgpqpcksvjydvlctgznlnz"

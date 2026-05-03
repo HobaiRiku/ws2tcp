@@ -6,7 +6,7 @@ import (
 	"net"
 	"net/netip"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/config"
 )
 
 // HostResolver looks up a target hostname. Pluggable so tests can inject

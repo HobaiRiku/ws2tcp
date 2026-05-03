@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/crypto"
+	"websocket2Tcp/internal/core/crypto"
 )
 
 // HandshakeCommand is the parsed form of the AES-encrypted ?command= query

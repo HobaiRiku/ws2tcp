@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/config"
 )
 
 // Registry holds the runtime view of config, plus stateful sub-services

@@ -3,7 +3,7 @@ package services
 import (
 	"fmt"
 
-	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/config"
 )
 
 // Endpoints returns a snapshot of configured client-side endpoints.
