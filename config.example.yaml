@@ -1,0 +1,56 @@
+# Example ws2tcp config — copy to ~/.ws2tcp/config.yaml and tweak.
+# Schema details: docs/design/01-config-and-storage.md
+
+app:
+  http_listen: "127.0.0.1:7321"   # management API + Web UI bind (loopback by default)
+  http_auth: true                 # require Bearer token from data/tokens.yaml
+  log_level: info                 # debug | info | warn | error
+
+# ─────────────────────── server role ───────────────────────
+server:
+  enabled: false
+  listen: "0.0.0.0:3005"
+  ws_path: /connect
+  ws_host: ""                     # "" disables Host gate
+  trust_proxy: false              # only enable behind a reverse proxy
+
+  aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"   # 32 bytes; must match every client
+  use_encryption: true
+
+  tls:
+    enabled: false
+    cert: certs/cert.pem
+    key:  certs/key.pem
+
+  clients:
+    - id: test1
+      secret: test1
+      acl:
+        - cidr: 192.168.1.0/24
+          ports: ["22", "80", "443"]
+        - cidr: 10.0.0.0/8
+          ports: ["3306", "6379", "8000-8999"]
+
+# ─────────────────────── client role ───────────────────────
+client:
+  enabled: false
+
+  # Reusable named connection profiles. Tunnels reference these by name.
+  endpoints:
+    - name: prod-ws
+      host: ws.example.com        # used for SNI + Host header
+      ip: ""                      # optional dial override; falls back to host
+      port: 3005
+      path: /connect
+      wss: false
+      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+      ssl_reject_unauthorized: false
+      client_id: test1
+      client_secret: test1
+
+  tunnels:
+    - name: ssh-prod
+      endpoint: prod-ws
+      listen: "127.0.0.1:2000"
+      target_host: 192.168.1.192
+      target_port: 22

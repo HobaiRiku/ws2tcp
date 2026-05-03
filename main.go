@@ -3,12 +3,13 @@ package main
 import (
 	"fmt"
 	"os"
+
+	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/cmd"
 )
 
-// Entry point. Real wiring lives in cmd/ (cobra root) and internal/app.
-// Kept minimal during the scaffolding phase so the tree compiles before
-// dependencies (cobra/viper/gin/...) are introduced.
 func main() {
-	fmt.Fprintln(os.Stderr, "ws2tcp: scaffolding only — see docs/design/00-overview.md")
-	os.Exit(0)
+	if err := cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(1)
+	}
 }
