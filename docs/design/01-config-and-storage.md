@@ -1,0 +1,199 @@
+# Config & Storage
+
+## Root directory
+
+Resolution order (first hit wins):
+
+1. `--home <path>` flag on the root cobra command
+2. `WS2TCP_HOME` environment variable
+3. `$HOME/.ws2tcp` (Linux/macOS) or `%USERPROFILE%\.ws2tcp` (Windows)
+
+We deliberately do **not** use `xdg.ConfigHome` / `xdg.DataHome` as the
+primary location. The project's design point is "one human-editable
+folder you can `tar` and move"; XDG split paths fight that. `xdg` is
+imported only as a last-resort fallback if `$HOME` is empty (rare,
+mainly headless service contexts).
+
+On startup the binary creates and `chmod 0700`s the tree (file mode
+`0600`):
+
+```
+~/.ws2tcp/
+├── config.yaml          # main config; everything below is derived
+├── certs/               # optional sslCert/sslKey for native wss
+│   ├── cert.pem
+│   └── key.pem
+├── data/
+│   ├── tokens.yaml      # API tokens (separate file = easy to chmod / rotate)
+│   └── runtime.json     # last-known runtime state, written on shutdown (advisory only)
+└── logs/
+    └── ws2tcp.log       # slog JSON, daily rotation via lumberjack-style writer
+```
+
+## YAML schema
+
+Single `config.yaml`. A complete annotated example:
+
+```yaml
+# ~/.ws2tcp/config.yaml
+
+app:
+  # Bind address for the management HTTP server (API + Web UI).
+  # Default loopback-only; set "0.0.0.0:7321" deliberately to expose.
+  http_listen: "127.0.0.1:7321"
+  # When true, the management API requires a Bearer token from data/tokens.yaml.
+  # Setting false is only honored when http_listen is loopback.
+  http_auth: true
+  log_level: info               # debug|info|warn|error
+
+# ─────────────────────── server role ───────────────────────
+server:
+  enabled: true
+  listen: "0.0.0.0:3005"        # ws/wss bind
+  ws_path: /connect
+  ws_host: example.com          # optional Host header gate; "" disables
+  trust_proxy: false            # honor X-Forwarded-For / X-Real-IP
+
+  aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"  # 32 bytes
+  use_encryption: true          # end-to-end AES on data plane
+
+  tls:
+    enabled: false
+    cert: certs/cert.pem        # paths are resolved relative to WS2TCP_HOME
+    key:  certs/key.pem
+
+  # Server-side identities. See 02-server-acl-auth.md for ACL semantics.
+  clients:
+    - id: test1
+      secret: test1
+      # ACL: list of allowed (cidr, ports) pairs. Empty list = deny all targets.
+      # Each port entry is a single port "22" or a range "8000-8999".
+      acl:
+        - cidr: 192.168.1.0/24
+          ports: ["22", "80", "443"]
+        - cidr: 10.0.0.0/8
+          ports: ["3306", "6379", "8000-8999"]
+
+# ─────────────────────── client role ───────────────────────
+client:
+  enabled: true
+
+  # Reusable named connection profiles to remote ws2tcp servers.
+  # A tunnel references one of these by `endpoint:` name — create the
+  # endpoint first, then point tunnels at it. Editing an endpoint
+  # resets every tunnel that uses it.
+  endpoints:
+    - name: prod-ws             # unique, referenced by tunnels
+      host: ws.example.com      # used for SNI + Host header
+      ip:   ""                  # optional dial override; falls back to host
+      port: 3005
+      path: /connect
+      wss:  false
+      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+      ssl_reject_unauthorized: false
+      client_id: test1
+      client_secret: test1
+
+    - name: stage-ws
+      host: ws.stage.example.com
+      port: 3005
+      path: /connect
+      wss: true
+      aes_key: "…"
+      client_id: test1
+      client_secret: test1
+
+  # A client process holds N tunnels concurrently.
+  # Tunnels carry only tunnel-local settings; everything about how to
+  # reach the remote ws2tcp server comes from the named endpoint.
+  tunnels:
+    - name: ssh-prod            # unique, used in CLI/API references
+      endpoint: prod-ws         # MUST match one client.endpoints[*].name
+      listen: "127.0.0.1:2000"
+      target_host: 192.168.1.192
+      target_port: 22
+
+    - name: mysql-stage
+      endpoint: stage-ws
+      listen: "127.0.0.1:3307"
+      target_host: 10.0.0.5
+      target_port: 3306
+```
+
+Schema-level notes:
+
+- **Endpoints are required prerequisites** for tunnels. Config load
+  fails fast if any tunnel references an unknown `endpoint`. The
+  CLI/API enforce the same — you cannot create a tunnel before its
+  endpoint exists, and you cannot delete an endpoint while any
+  tunnel still references it (delete the tunnels first or `--force`
+  to drop both atomically).
+- One endpoint backs many tunnels. Editing an endpoint resets every
+  tunnel that references it (see `03-client-tunnel-manager.md`).
+- `aes_key` length is validated at load time (must be exactly 32 bytes
+  to match AES-256-CBC); we surface a clear error rather than panicking
+  at first encryption.
+- ACL `ports` strings are parsed once at load and cached as a
+  `[]portRange{lo, hi}` for O(rules) match.
+- We rely on YAML's plain scalar rules carefully: `aes_key` is always
+  quoted (it can start with characters YAML would otherwise interpret)
+  and listen addresses are always quoted (`"0.0.0.0:3005"`) to avoid
+  the colon being parsed as a mapping.
+
+## Tokens
+
+`data/tokens.yaml` is separate so it can have stricter `chmod` and so
+edits don't churn the main config file:
+
+```yaml
+tokens:
+  - name: cli-local
+    hash: "argon2id$..."
+    created_at: 2026-05-03T10:00:00Z
+    expires_at: 0                # 0 = never
+    scopes: [admin]              # admin | read | client:write | server:write
+```
+
+We store **argon2id hashes**, not plaintext. Plaintext is shown exactly
+once when `ws2tcp config token add` issues a token.
+
+When `app.http_auth: false` *and* `app.http_listen` resolves to a
+loopback address, the API skips token checks. Any non-loopback bind
+forces `http_auth: true` regardless of config.
+
+## Loading & writing
+
+- **Load path** (`internal/config`): viper reads `config.yaml`,
+  unmarshals into typed structs, runs validators (`validate.Struct`
+  via `go-playground/validator` — small enough dep, optional; can be
+  hand-rolled). `Defaults()` fills missing fields exactly the way the
+  Node implementation defaults today (`use_encryption: true`,
+  `trust_proxy: false`, `ssl_reject_unauthorized: false`, etc.).
+- **Write path** (CLI/API edits): we don't round-trip through viper
+  (it loses comments/ordering). Instead the `services.Config` mutator
+  uses `gopkg.in/yaml.v3`'s `*yaml.Node` API to load → mutate → write
+  the file atomically (`os.WriteFile` to `config.yaml.tmp`,
+  `os.Rename`). `yaml.v3` preserves comments and key order on the
+  unchanged parts of the document, which keeps the file pleasant to
+  diff in version control. Other goroutines pick up the change via
+  the reload channel below.
+
+## Reload semantics
+
+Hot reload via fsnotify on `config.yaml`:
+
+| Section changed                    | Effect |
+|------------------------------------|--------|
+| `app.http_listen` / `http_auth`    | restart HTTP server |
+| `app.log_level`                    | live, no restart |
+| `server.*`                         | restart server subsystem (drains existing connections) |
+| `server.clients[*]` add/remove/edit | live: cached user table swapped atomically; **existing connections continue**, but their ACL is re-checked on next dial within the same tunnel — see 02 |
+| `client.enabled` flip              | start or stop the whole client subsystem |
+| `client.endpoints[*]` add          | no-op until a tunnel uses it |
+| `client.endpoints[*]` edit         | reset **every tunnel** that references this endpoint name |
+| `client.endpoints[*]` remove       | rejected if any tunnel still references it (load-time validator) |
+| `client.tunnels[*]` add            | spin up new tunnel only |
+| `client.tunnels[*]` edit/remove    | reset that tunnel only (its sub-ctx cancelled, then rebuilt) |
+
+The "reset only its own connections" property is what lets the Web UI
+feel responsive — see [03](./03-client-tunnel-manager.md).
