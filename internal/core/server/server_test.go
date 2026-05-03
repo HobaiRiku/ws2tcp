@@ -2,7 +2,6 @@ package server
 
 import (
 	"net/http/httptest"
-	"net/url"
 	"testing"
 
 	"gitlab.hobairiku.site/hobairiku/websocket2Tcp/internal/core/crypto"
@@ -50,9 +49,8 @@ func TestParseCommandRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	urlEncoded := url.QueryEscape(enc)
-
-	got, err := ParseCommand(urlEncoded, []byte(k32))
+	// Caller (handler) has already URL-decoded by the time we reach ParseCommand.
+	got, err := ParseCommand(enc, []byte(k32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,9 +63,8 @@ func TestParseCommandRoundTrip(t *testing.T) {
 
 func TestParseCommandRejectsBadInputs(t *testing.T) {
 	cases := []string{
-		"",                            // empty
-		"%ZZ",                         // bad URL escape
-		"not-base64-at-all-!@#",       // bad base64
+		"",                      // empty
+		"not-base64-at-all-!@#", // bad base64
 	}
 	for _, c := range cases {
 		if _, err := ParseCommand(c, []byte(k32)); err == nil {

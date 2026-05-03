@@ -3,7 +3,6 @@ package server
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"strconv"
 	"strings"
 
@@ -24,18 +23,16 @@ type HandshakeCommand struct {
 // Upgrade handlers convert it into a 401 without leaking specifics.
 var ErrAuthFailed = errors.New("auth failed")
 
-// ParseCommand URL-decodes, base64-decodes, AES-decrypts, and splits the
-// command query value using sharedKey (32 bytes). Errors are wrapped under
-// ErrAuthFailed so callers can rejecting the upgrade with a single 401.
+// ParseCommand base64-decodes, AES-decrypts, and splits the command query
+// value using sharedKey (32 bytes). The caller is expected to have already
+// URL-decoded cmd (e.g. via r.URL.Query().Get("command") which decodes for
+// us). Errors are wrapped under ErrAuthFailed so callers can reject the
+// upgrade with a single 401.
 func ParseCommand(cmd string, sharedKey []byte) (HandshakeCommand, error) {
 	if cmd == "" {
 		return HandshakeCommand{}, fmt.Errorf("%w: empty command", ErrAuthFailed)
 	}
-	decoded, err := url.QueryUnescape(cmd)
-	if err != nil {
-		return HandshakeCommand{}, fmt.Errorf("%w: url-decode: %v", ErrAuthFailed, err)
-	}
-	plain, err := crypto.AesDecryptString(decoded, sharedKey)
+	plain, err := crypto.AesDecryptString(cmd, sharedKey)
 	if err != nil {
 		return HandshakeCommand{}, fmt.Errorf("%w: aes-decrypt: %v", ErrAuthFailed, err)
 	}
