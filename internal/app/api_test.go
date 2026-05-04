@@ -60,6 +60,16 @@ func TestRunServesManagementAPI(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("unexpected api status: %d", resp.StatusCode)
 	}
+	resp.Body.Close()
+
+	resp, err = http.Get("http://" + cfg.App.HTTPListen + "/dashboard")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected web status: %d", resp.StatusCode)
+	}
 
 	cancel()
 	select {

@@ -15,10 +15,11 @@
 9. Finished `api-events`
    - added shared in-process event bus plus `/api/events/stream` and `/api/events/ws`
    - published `tunnel.state` and `server.conn.*` runtime events from the client/server data plane
+10. Finished `web-embed`
+   - added embedded SPA shell under `internal/web/static`
+   - mounted root/history-fallback routing without intercepting `/api/*`
 
 ## Left to do
 
-1. `web-embed`
-   - embed SPA assets and add SPA fallback handler
-2. `tests-interop`
+1. `tests-interop`
    - Go↔Node interop fixtures after legacy payload capture is available

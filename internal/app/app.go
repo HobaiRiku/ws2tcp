@@ -21,6 +21,7 @@ import (
 	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/services"
 	"websocket2Tcp/internal/services/events"
+	"websocket2Tcp/internal/web"
 )
 
 // Options bundles the inputs Run needs. Built by cmd/ from CLI flags.
@@ -102,17 +103,19 @@ func Run(ctx context.Context, opts Options) error {
 
 func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
 	auth := services.NewAuthService(opts.Paths.Tokens(), opts.Paths.FileMode())
+	router := api.NewRouter(api.Options{
+		Registry:    reg,
+		Runtime:     rt,
+		Auth:        auth,
+		Events:      bus,
+		RequireAuth: opts.Config.App.HTTPAuth,
+		Logger:      opts.Logger.With("component", "api"),
+	})
+	web.Mount(router)
 
 	srv := &http.Server{
-		Addr: opts.Config.App.HTTPListen,
-		Handler: api.NewRouter(api.Options{
-			Registry:    reg,
-			Runtime:     rt,
-			Auth:        auth,
-			Events:      bus,
-			RequireAuth: opts.Config.App.HTTPAuth,
-			Logger:      opts.Logger.With("component", "api"),
-		}),
+		Addr:              opts.Config.App.HTTPListen,
+		Handler:           router,
 		ReadHeaderTimeout: 15 * time.Second,
 	}
 
