@@ -28,6 +28,11 @@ func Root() *cobra.Command {
 
 	root.AddCommand(
 		runCmd(),
+		installCmd(),
+		uninstallCmd(),
+		startCmd(),
+		stopCmd(),
+		statusCmd(),
 		versionCmd(),
 	)
 	return root
