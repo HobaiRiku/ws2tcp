@@ -15,8 +15,7 @@ package services
 type Registry struct {
     Config    ConfigService
     Clients   ClientsService     // server-side identities + ACL
-    Endpoints EndpointsService   // client-side reusable server profiles
-    Tunnels   TunnelsService     // client-side tunnels (reference Endpoints by name)
+    Tunnels   TunnelsService     // client-side tunnels under one shared upstream endpoint
     Runtime   RuntimeService     // read-only live state
     Auth      AuthService        // API tokens
     System    SystemService      // start/stop/reload subsystems
@@ -32,20 +31,10 @@ type ClientsService interface {
     SetACL(ctx, id string, rules []ACLRule) error
 }
 
-type EndpointsService interface {
-    List(ctx) ([]Endpoint, error)
-    Get(ctx, name string) (Endpoint, error)
-    Create(ctx, Endpoint) error
-    Update(ctx, name string, patch EndpointPatch) error
-    Delete(ctx, name string, force bool) error  // refuses if force=false and tunnels still reference it
-
-    UsedBy(ctx, name string) ([]string, error)  // tunnel names; powers UI confirms + CLI errors
-}
-
 type TunnelsService interface {
     List(ctx) ([]TunnelStatus, error)
     Get(ctx, name string) (TunnelStatus, error)
-    Create(ctx, TunnelSpec) error               // TunnelSpec.Endpoint MUST exist; validated here
+    Create(ctx, TunnelSpec) error
     Update(ctx, name string, spec TunnelSpec) error
     Delete(ctx, name string) error
     Start(ctx, name string) error
@@ -58,7 +47,6 @@ type TunnelsService interface {
 ```go
 type TunnelSpec struct {
     Name       string
-    Endpoint   string   // foreign-key into EndpointsService
     Listen     string
     TargetHost string
     TargetPort uint16
@@ -128,17 +116,11 @@ GET    /api/server/connections           list live ws connections
 POST   /api/server/connections/{id}:kick force-close one
 GET    /api/server/stats
 
-# Client server-endpoints (reusable connection profiles)
-GET    /api/client/endpoints
-POST   /api/client/endpoints
-GET    /api/client/endpoints/{name}
-PATCH  /api/client/endpoints/{name}
-DELETE /api/client/endpoints/{name}?force=true|false
-GET    /api/client/endpoints/{name}/used-by   # list of dependent tunnel names
-
-# Client tunnels (reference an endpoint by name)
-GET    /api/client/tunnels                    # response items include `endpoint`
-POST   /api/client/tunnels                    # 422 if `endpoint` is unknown
+# Client runtime
+GET    /api/client/endpoint
+PUT    /api/client/endpoint
+GET    /api/client/tunnels
+POST   /api/client/tunnels
 GET    /api/client/tunnels/{name}
 PATCH  /api/client/tunnels/{name}
 DELETE /api/client/tunnels/{name}
@@ -201,6 +183,7 @@ ws2tcp config show
 ws2tcp config edit                           # opens $EDITOR on config.yaml
 ws2tcp config set <dotted.key> <value>
 ws2tcp config path
+ws2tcp config client-auth set --client-id … --client-secret …
 ws2tcp config token add  --name <n> --scope admin
 ws2tcp config token list
 ws2tcp config token rm   <name>
@@ -213,16 +196,12 @@ ws2tcp server acl  set       <id> <rule>...   # rule = "192.168.0.0/16:22,80,800
 ws2tcp server conns list
 ws2tcp server conns kick     <connId>
 
-ws2tcp client endpoints list
-ws2tcp client endpoints add    --name … --host … --port … [--wss] [--path /connect]
-                               --aes-key … --client-id … --client-secret …
-ws2tcp client endpoints update <name> [--host …] [--port …] [--aes-key …] …
-ws2tcp client endpoints rm     <name> [--force]
-ws2tcp client endpoints show   <name>          # full settings + tunnels using it
+ws2tcp client endpoint show
+ws2tcp client endpoint set     --host … --port … [--wss] [--path /connect] --aes-key …
 
-ws2tcp client tunnels list                     # default columns: NAME ENDPOINT STATE LISTEN TARGET CONNS
-ws2tcp client tunnels add    --name … --endpoint <ep-name> --listen … --target host:port
-ws2tcp client tunnels update <name> [--endpoint …] [--listen …] [--target …]
+ws2tcp client tunnels list                     # default columns: NAME STATE LISTEN TARGET CONNS
+ws2tcp client tunnels add    --name … --listen … --target host:port
+ws2tcp client tunnels update <name> [--listen …] [--target …]
 ws2tcp client tunnels rm     <name>
 ws2tcp client tunnels start  <name>
 ws2tcp client tunnels stop   <name>
@@ -232,11 +211,9 @@ ws2tcp client tunnels stop   <name>
 `<cidr>:<ports>[,<ports>…]` so it's pleasant to type; the parser is
 the inverse of how the YAML gets serialized back.
 
-`tunnels add` validates `--endpoint` against `EndpointsService.Get`
-before writing anything. `endpoints rm` returns the
-`UsedBy(name)` list in its error message when the endpoint is in use,
-so the operator knows which tunnels to remove (or `--force`) without
-a second command.
+`client endpoint set` updates the one shared upstream server config for
+that client runtime. Any live tunnels are reset so new connections use
+the new endpoint immediately.
 
 Output: human-formatted tables by default; `--json` for machine
 consumption. Both go through the same `services.*` calls — the CLI

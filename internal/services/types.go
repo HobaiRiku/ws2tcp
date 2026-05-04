@@ -30,9 +30,10 @@ type ParsedACLRule struct {
 // snapshot is the immutable bundle held behind atomic.Pointer so that ACL
 // edits can land while existing connections continue with their old view.
 type snapshot struct {
-	identities []Identity
-	byID       map[string]*Identity
-	endpoints  map[string]config.Endpoint
-	tunnels    []config.Tunnel
+	identities   []Identity
+	byID         map[string]*Identity
+	clientID     string
+	clientSecret string
+	endpoint     config.Endpoint
+	tunnels      []config.Tunnel
 }
-

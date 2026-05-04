@@ -3,9 +3,12 @@ package services
 import (
 	"context"
 	"net/netip"
+	"os"
+	"strings"
 	"testing"
 
 	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/paths"
 )
 
 const k32 = "njpjvjkgfykgpqpcksvjydvlctgznlnz"
@@ -30,16 +33,75 @@ func sampleConfig() *config.Config {
 			},
 		},
 		Client: config.ClientConfig{
-			Enabled: true,
-			Endpoints: []config.Endpoint{
-				{Name: "ep1", Host: "x", Port: 3005, Path: "/c", AESKey: k32, ClientID: "u1", ClientSecret: "s1"},
-			},
+			Enabled:      true,
+			ClientID:     "u1",
+			ClientSecret: "s1",
+			Endpoint:     config.Endpoint{Host: "x", Port: 3005, Path: "/c", AESKey: k32},
 			Tunnels: []config.Tunnel{
-				{Name: "t1", Endpoint: "ep1", Listen: "127.0.0.1:1", TargetHost: "x", TargetPort: 22},
+				{Name: "t1", Listen: "127.0.0.1:1", TargetHost: "x", TargetPort: 22},
 			},
 		},
 		App: config.AppConfig{HTTPListen: "127.0.0.1:7321", HTTPAuth: true, LogLevel: "info"},
 	}
+}
+
+func newStoredRegistry(t *testing.T) (*Registry, paths.Paths) {
+	t.Helper()
+
+	p, err := paths.Resolve(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.EnsureTree(); err != nil {
+		t.Fatal(err)
+	}
+
+	raw := strings.TrimSpace(`
+# keep me
+app:
+  http_listen: "127.0.0.1:7321"
+  http_auth: true
+  log_level: info
+server:
+  enabled: true
+  listen: "0.0.0.0:3005"
+  ws_path: /connect
+  aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+  use_encryption: true
+  clients:
+    - id: u1
+      secret: s1
+      acl:
+        - cidr: 192.168.1.0/24
+          ports: ["22", "80-90"]
+client:
+  enabled: true
+  client_id: u1
+  client_secret: s1
+  endpoint:
+    host: x
+    port: 3005
+    path: /c
+    aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+  tunnels:
+    - name: t1
+      listen: "127.0.0.1:1"
+      target_host: x
+      target_port: 22
+`) + "\n"
+	if err := os.WriteFile(p.Config(), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewWithPaths(cfg, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r, p
 }
 
 func TestVerifyOK(t *testing.T) {
@@ -108,7 +170,7 @@ func TestAllowsDNSAllAddrsMustMatch(t *testing.T) {
 	r, _ := New(sampleConfig())
 	id, _ := r.Verify("u1", "s1")
 	resolver := fixedResolver{
-		"good.example": {netip.MustParseAddr("192.168.1.5"), netip.MustParseAddr("192.168.1.6")},
+		"good.example":  {netip.MustParseAddr("192.168.1.5"), netip.MustParseAddr("192.168.1.6")},
 		"mixed.example": {netip.MustParseAddr("192.168.1.5"), netip.MustParseAddr("8.8.8.8")},
 	}
 	ctx := context.Background()
@@ -136,16 +198,120 @@ func TestApplySwapsSnapshot(t *testing.T) {
 	}
 }
 
-func TestResolveTunnelEndpoint(t *testing.T) {
+func TestClientEndpoint(t *testing.T) {
 	r, _ := New(sampleConfig())
-	tn, ep, err := r.ResolveTunnelEndpoint("t1")
+	ep := r.ClientEndpoint()
+	if ep.Host != "x" || ep.Port != 3005 {
+		t.Fatalf("got host=%q port=%d", ep.Host, ep.Port)
+	}
+}
+
+func TestCreateClientPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	err := r.CreateClient(config.ClientIdentity{
+		ID:     "u2",
+		Secret: "s2",
+		ACL: []config.ACLRule{
+			{CIDR: "10.0.0.0/8", Ports: []string{"3306"}},
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tn.Name != "t1" || ep.Name != "ep1" {
-		t.Fatalf("got tn=%q ep=%q", tn.Name, ep.Name)
+
+	if _, ok := r.Verify("u2", "s2"); !ok {
+		t.Fatal("new client not applied to live registry")
 	}
-	if _, _, err := r.ResolveTunnelEndpoint("missing"); err == nil {
-		t.Fatal("want error on missing tunnel")
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "# keep me") {
+		t.Fatal("config comment was not preserved")
+	}
+	if !strings.Contains(text, "id: u2") {
+		t.Fatal("new client not written to config")
+	}
+}
+
+func TestUpdateClientPersistsSecretAndACL(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	secret := "rotated"
+	rules := []config.ACLRule{{CIDR: "10.0.0.0/8", Ports: []string{"443"}}}
+	if err := r.UpdateClient("u1", ClientPatch{
+		Secret: &secret,
+		ACL:    &rules,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := r.Verify("u1", "rotated"); !ok {
+		t.Fatal("updated secret not applied")
+	}
+	id, err := r.FindIdentity("u1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(id.ACL) != 1 || !id.ACL[0].CIDR.Contains(netip.MustParseAddr("10.1.2.3")) {
+		t.Fatalf("updated ACL not applied: %+v", id.ACL)
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "secret: rotated") {
+		t.Fatal("updated secret not written to config")
+	}
+}
+
+func TestDeleteClientPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	if err := r.DeleteClient("u1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.Verify("u1", "s1"); ok {
+		t.Fatal("deleted client still present in live registry")
+	}
+
+	cfg, err := config.Load(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, client := range cfg.Server.Clients {
+		if client.ID == "u1" {
+			t.Fatal("deleted client still present in server.clients")
+		}
+	}
+}
+
+func TestSetClientACLRollsBackOnInvalidConfig(t *testing.T) {
+	r, p := newStoredRegistry(t)
+	before, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = r.SetClientACL("u1", []config.ACLRule{
+		{CIDR: "not-a-cidr", Ports: []string{"22"}},
+	})
+	if err == nil {
+		t.Fatal("expected invalid ACL error")
+	}
+
+	after, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("config file was not rolled back after invalid update")
+	}
+	if _, ok := r.Verify("u1", "s1"); !ok {
+		t.Fatal("live registry changed after failed update")
 	}
 }

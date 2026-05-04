@@ -34,23 +34,20 @@ server:
 # ─────────────────────── client role ───────────────────────
 client:
   enabled: false
+  client_id: test1
+  client_secret: test1
 
-  # Reusable named connection profiles. Tunnels reference these by name.
-  endpoints:
-    - name: prod-ws
-      host: ws.example.com        # used for SNI + Host header
-      ip: ""                      # optional dial override; falls back to host
-      port: 3005
-      path: /connect
-      wss: false
-      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
-      ssl_reject_unauthorized: false
-      client_id: test1
-      client_secret: test1
+  endpoint:
+    host: ws.example.com          # used for SNI + Host header
+    ip: ""                        # optional dial override; falls back to host
+    port: 3005
+    path: /connect
+    wss: false
+    aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+    ssl_reject_unauthorized: false
 
   tunnels:
     - name: ssh-prod
-      endpoint: prod-ws
       listen: "127.0.0.1:2000"
       target_host: 192.168.1.192
       target_port: 22

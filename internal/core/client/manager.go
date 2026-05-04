@@ -17,7 +17,7 @@ import (
 //   - new tunnel  -> spin up
 //   - removed     -> cancel + drop
 //   - changed     -> cancel + restart
-//   - endpoint changed -> cancel + restart every tunnel that uses it
+//   - client endpoint/auth changed -> cancel + restart every tunnel
 //
 // "Cancel + restart" is what gives the design its "edit a tunnel = reset
 // only its own connections" property.
@@ -34,6 +34,7 @@ type Manager struct {
 type runningTunnel struct {
 	cfg    config.Tunnel
 	ep     config.Endpoint
+	auth   services.ClientCredentials
 	cancel context.CancelFunc
 	done   chan struct{}
 }
@@ -71,6 +72,8 @@ func (m *Manager) reconcile() {
 	}
 
 	desired := map[string]config.Tunnel{}
+	auth := m.registry.ClientCredentials()
+	ep := m.registry.ClientEndpoint()
 	for _, t := range m.registry.Tunnels() {
 		desired[t.Name] = t
 	}
@@ -82,13 +85,7 @@ func (m *Manager) reconcile() {
 			m.stopLocked(name)
 			continue
 		}
-		ep, err := m.registry.FindEndpoint(want.Endpoint)
-		if err != nil {
-			m.log.Error("missing endpoint on reconcile", "tunnel", name, "endpoint", want.Endpoint)
-			m.stopLocked(name)
-			continue
-		}
-		if !reflect.DeepEqual(rt.cfg, want) || !reflect.DeepEqual(rt.ep, ep) {
+		if !reflect.DeepEqual(rt.cfg, want) || !reflect.DeepEqual(rt.ep, ep) || !reflect.DeepEqual(rt.auth, auth) {
 			m.stopLocked(name)
 		}
 	}
@@ -98,21 +95,16 @@ func (m *Manager) reconcile() {
 		if _, ok := m.running[name]; ok {
 			continue
 		}
-		ep, err := m.registry.FindEndpoint(want.Endpoint)
-		if err != nil {
-			m.log.Error("tunnel references unknown endpoint", "tunnel", name, "endpoint", want.Endpoint)
-			continue
-		}
-		m.startLocked(want, ep)
+		m.startLocked(want, ep, auth)
 	}
 }
 
-func (m *Manager) startLocked(t config.Tunnel, ep config.Endpoint) {
+func (m *Manager) startLocked(t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials) {
 	tCtx, cancel := context.WithCancel(m.rootCtx)
-	rt := &runningTunnel{cfg: t, ep: ep, cancel: cancel, done: make(chan struct{})}
+	rt := &runningTunnel{cfg: t, ep: ep, auth: auth, cancel: cancel, done: make(chan struct{})}
 	m.running[t.Name] = rt
 
-	tunnel := NewTunnel(t, ep, m.runtime, m.log)
+	tunnel := NewTunnel(t, ep, auth, m.runtime, m.log)
 	go func() {
 		defer close(rt.done)
 		if err := tunnel.Run(tCtx); err != nil {

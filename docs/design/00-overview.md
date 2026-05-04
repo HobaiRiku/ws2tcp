@@ -34,11 +34,11 @@ Sub-designs live alongside this file:
 5. **New capabilities**:
    - Server: per-client **ACL** (CIDR + port ranges) on top of
      id/secret auth.
-   - **Server Endpoint** as a first-class, named business object:
-     a reusable bundle of remote ws2tcp-server connection settings
-     (host/port/path/wss/aes_key/client credentials). Tunnels reference
-     an endpoint by name; you create the endpoint first, then point
-     tunnels at it. One endpoint, many tunnels.
+    - **Client-scoped upstream endpoint**:
+      one bundle of remote ws2tcp-server connection settings
+      (host/port/path/wss/aes_key) lives under the client section, and
+      every tunnel in that client runtime uses it. Client credentials
+      also live once under the client section itself.
    - Client: a single client process manages **N tunnels** concurrently;
      editing or stopping a tunnel resets only its own connections.
    - Token-authenticated HTTP API with configurable bind address (default

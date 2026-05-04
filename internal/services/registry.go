@@ -3,10 +3,12 @@ package services
 import (
 	"fmt"
 	"net/netip"
+	"os"
 	"sync"
 	"sync/atomic"
 
 	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/paths"
 )
 
 // Registry holds the runtime view of config, plus stateful sub-services
@@ -18,8 +20,12 @@ import (
 type Registry struct {
 	cur atomic.Pointer[snapshot]
 
-	mu       sync.Mutex // guards Apply against concurrent rebuilds
-	listeners []func()  // fired after each successful Apply (cheap; for hot reload)
+	mu        sync.Mutex // guards Apply against concurrent rebuilds
+	listeners []func()   // fired after each successful Apply (cheap; for hot reload)
+
+	storeMu    sync.Mutex
+	configPath string
+	fileMode   os.FileMode
 }
 
 // New parses cfg into the initial snapshot and returns a Registry.
@@ -33,6 +39,18 @@ func New(cfg *config.Config) (*Registry, error) {
 	}
 	r := &Registry{}
 	r.cur.Store(snap)
+	return r, nil
+}
+
+// NewWithPaths wires the Registry to an on-disk config store so service-layer
+// mutations can persist back to config.yaml before applying the new snapshot.
+func NewWithPaths(cfg *config.Config, p paths.Paths) (*Registry, error) {
+	r, err := New(cfg)
+	if err != nil {
+		return nil, err
+	}
+	r.configPath = p.Config()
+	r.fileMode = p.FileMode()
 	return r, nil
 }
 
@@ -67,9 +85,11 @@ func (r *Registry) snap() *snapshot { return r.cur.Load() }
 // one pass.
 func buildSnapshot(cfg *config.Config) (*snapshot, error) {
 	s := &snapshot{
-		byID:      map[string]*Identity{},
-		endpoints: map[string]config.Endpoint{},
-		tunnels:   append([]config.Tunnel(nil), cfg.Client.Tunnels...),
+		byID:         map[string]*Identity{},
+		clientID:     cfg.Client.ClientID,
+		clientSecret: cfg.Client.ClientSecret,
+		endpoint:     cfg.Client.Endpoint,
+		tunnels:      append([]config.Tunnel(nil), cfg.Client.Tunnels...),
 	}
 	s.identities = make([]Identity, 0, len(cfg.Server.Clients))
 
@@ -86,9 +106,6 @@ func buildSnapshot(cfg *config.Config) (*snapshot, error) {
 		s.byID[s.identities[i].ID] = &s.identities[i]
 	}
 
-	for _, ep := range cfg.Client.Endpoints {
-		s.endpoints[ep.Name] = ep
-	}
 	return s, nil
 }
 

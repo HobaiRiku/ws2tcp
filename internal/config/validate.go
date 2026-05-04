@@ -92,33 +92,21 @@ func (c *Config) validateClient() []string {
 		return nil
 	}
 	var errs []string
-
-	epNames := map[string]bool{}
-	for i, ep := range c.Client.Endpoints {
-		prefix := fmt.Sprintf("client.endpoints[%d]", i)
-		if ep.Name == "" {
-			errs = append(errs, prefix+".name required")
-			continue
-		}
-		if epNames[ep.Name] {
-			errs = append(errs, fmt.Sprintf("%s.name %q duplicated", prefix, ep.Name))
-		}
-		epNames[ep.Name] = true
-		if ep.Host == "" {
-			errs = append(errs, prefix+".host required")
-		}
-		if ep.Port <= 0 || ep.Port > 65535 {
-			errs = append(errs, fmt.Sprintf("%s.port out of range: %d", prefix, ep.Port))
-		}
-		if ep.Path == "" {
-			errs = append(errs, prefix+".path required")
-		}
-		if err := validateAESKey(ep.AESKey); err != nil {
-			errs = append(errs, fmt.Sprintf("%s.aes_key: %v", prefix, err))
-		}
-		if ep.ClientID == "" || ep.ClientSecret == "" {
-			errs = append(errs, prefix+".client_id and client_secret required")
-		}
+	if c.Client.ClientID == "" || c.Client.ClientSecret == "" {
+		errs = append(errs, "client.client_id and client.client_secret required when client.enabled")
+	}
+	ep := c.Client.Endpoint
+	if ep.Host == "" {
+		errs = append(errs, "client.endpoint.host required")
+	}
+	if ep.Port <= 0 || ep.Port > 65535 {
+		errs = append(errs, fmt.Sprintf("client.endpoint.port out of range: %d", ep.Port))
+	}
+	if ep.Path == "" {
+		errs = append(errs, "client.endpoint.path required")
+	}
+	if err := validateAESKey(ep.AESKey); err != nil {
+		errs = append(errs, fmt.Sprintf("client.endpoint.aes_key: %v", err))
 	}
 
 	tNames := map[string]bool{}
@@ -132,11 +120,6 @@ func (c *Config) validateClient() []string {
 			errs = append(errs, fmt.Sprintf("%s.name %q duplicated", prefix, t.Name))
 		}
 		tNames[t.Name] = true
-		if !epNames[t.Endpoint] {
-			errs = append(errs, fmt.Sprintf(
-				"%s.endpoint %q does not match any client.endpoints[*].name",
-				prefix, t.Endpoint))
-		}
 		if t.Listen == "" {
 			errs = append(errs, prefix+".listen required")
 		}

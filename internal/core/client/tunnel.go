@@ -53,6 +53,7 @@ const (
 type Tunnel struct {
 	cfg     config.Tunnel
 	ep      config.Endpoint
+	auth    services.ClientCredentials
 	runtime *services.Runtime
 	log     *slog.Logger
 }
@@ -60,8 +61,8 @@ type Tunnel struct {
 // NewTunnel binds a tunnel to its resolved endpoint snapshot. The endpoint
 // is captured by value so a later edit (handled at the manager level via
 // Apply) won't half-update an in-flight tunnel.
-func NewTunnel(t config.Tunnel, ep config.Endpoint, rt *services.Runtime, log *slog.Logger) *Tunnel {
-	return &Tunnel{cfg: t, ep: ep, runtime: rt, log: log.With("tunnel", t.Name)}
+func NewTunnel(t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials, rt *services.Runtime, log *slog.Logger) *Tunnel {
+	return &Tunnel{cfg: t, ep: ep, auth: auth, runtime: rt, log: log.With("tunnel", t.Name)}
 }
 
 // Run starts the local TCP listener and serves accepts until ctx is done.
@@ -72,7 +73,7 @@ func (t *Tunnel) Run(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listen %s: %w", t.cfg.Listen, err)
 	}
-	t.log.Info("tunnel listening", "listen", t.cfg.Listen, "endpoint", t.ep.Name)
+	t.log.Info("tunnel listening", "listen", t.cfg.Listen, "endpoint_host", t.ep.Host)
 
 	go func() {
 		<-ctx.Done()
@@ -107,7 +108,7 @@ func (t *Tunnel) handleConn(ctx context.Context, tcp net.Conn) {
 		return
 	}
 	auth := fmt.Sprintf("%s:%s:%s:%d:%s",
-		t.ep.ClientID, t.ep.ClientSecret, t.cfg.TargetHost, t.cfg.TargetPort, connID)
+		t.auth.ClientID, t.auth.ClientSecret, t.cfg.TargetHost, t.cfg.TargetPort, connID)
 	encCmd, err := crypto.AesEncrypt([]byte(auth), []byte(t.ep.AESKey))
 	if err != nil {
 		t.log.Error("auth encrypt", "err", err)
@@ -124,7 +125,7 @@ func (t *Tunnel) handleConn(ctx context.Context, tcp net.Conn) {
 	})
 	cancel()
 	if err != nil {
-		t.log.Warn("ws dial failed", "err", err, "endpoint", t.ep.Name)
+		t.log.Warn("ws dial failed", "err", err, "endpoint_host", t.ep.Host)
 		return
 	}
 	defer wsConn.Close(websocket.StatusNormalClosure, "")
@@ -133,7 +134,7 @@ func (t *Tunnel) handleConn(ctx context.Context, tcp net.Conn) {
 	// successful target dial. Anything else is a protocol error.
 	useEnc, e2eKey, err := readStreamUp(ctx, wsConn, []byte(t.ep.AESKey))
 	if err != nil {
-		t.log.Warn("streamUp read failed", "err", err, "endpoint", t.ep.Name)
+		t.log.Warn("streamUp read failed", "err", err, "endpoint_host", t.ep.Host)
 		return
 	}
 

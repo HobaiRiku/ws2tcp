@@ -77,44 +77,29 @@ server:
 # ─────────────────────── client role ───────────────────────
 client:
   enabled: true
+  client_id: test1
+  client_secret: test1
 
-  # Reusable named connection profiles to remote ws2tcp servers.
-  # A tunnel references one of these by `endpoint:` name — create the
-  # endpoint first, then point tunnels at it. Editing an endpoint
-  # resets every tunnel that uses it.
-  endpoints:
-    - name: prod-ws             # unique, referenced by tunnels
-      host: ws.example.com      # used for SNI + Host header
-      ip:   ""                  # optional dial override; falls back to host
-      port: 3005
-      path: /connect
-      wss:  false
-      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
-      ssl_reject_unauthorized: false
-      client_id: test1
-      client_secret: test1
-
-    - name: stage-ws
-      host: ws.stage.example.com
-      port: 3005
-      path: /connect
-      wss: true
-      aes_key: "…"
-      client_id: test1
-      client_secret: test1
+  # One shared upstream ws2tcp-server config for this client runtime.
+  endpoint:
+    host: ws.example.com        # used for SNI + Host header
+    ip:   ""                    # optional dial override; falls back to host
+    port: 3005
+    path: /connect
+    wss:  false
+    aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+    ssl_reject_unauthorized: false
 
   # A client process holds N tunnels concurrently.
-  # Tunnels carry only tunnel-local settings; everything about how to
-  # reach the remote ws2tcp server comes from the named endpoint.
+  # Tunnels carry only tunnel-local settings; the upstream client
+  # credentials and remote server endpoint live once at client scope.
   tunnels:
     - name: ssh-prod            # unique, used in CLI/API references
-      endpoint: prod-ws         # MUST match one client.endpoints[*].name
       listen: "127.0.0.1:2000"
       target_host: 192.168.1.192
       target_port: 22
 
     - name: mysql-stage
-      endpoint: stage-ws
       listen: "127.0.0.1:3307"
       target_host: 10.0.0.5
       target_port: 3306
@@ -122,14 +107,9 @@ client:
 
 Schema-level notes:
 
-- **Endpoints are required prerequisites** for tunnels. Config load
-  fails fast if any tunnel references an unknown `endpoint`. The
-  CLI/API enforce the same — you cannot create a tunnel before its
-  endpoint exists, and you cannot delete an endpoint while any
-  tunnel still references it (delete the tunnels first or `--force`
-  to drop both atomically).
-- One endpoint backs many tunnels. Editing an endpoint resets every
-  tunnel that references it (see `03-client-tunnel-manager.md`).
+- **`client.endpoint` is shared** by every tunnel in the client
+  process. Editing it resets every running tunnel in that client (see
+  `03-client-tunnel-manager.md`).
 - `aes_key` length is validated at load time (must be exactly 32 bytes
   to match AES-256-CBC); we surface a clear error rather than panicking
   at first encryption.
@@ -189,9 +169,7 @@ Hot reload via fsnotify on `config.yaml`:
 | `server.*`                         | restart server subsystem (drains existing connections) |
 | `server.clients[*]` add/remove/edit | live: cached user table swapped atomically; **existing connections continue**, but their ACL is re-checked on next dial within the same tunnel — see 02 |
 | `client.enabled` flip              | start or stop the whole client subsystem |
-| `client.endpoints[*]` add          | no-op until a tunnel uses it |
-| `client.endpoints[*]` edit         | reset **every tunnel** that references this endpoint name |
-| `client.endpoints[*]` remove       | rejected if any tunnel still references it (load-time validator) |
+| `client.endpoint.*` edit           | reset **every tunnel** in the client subsystem |
 | `client.tunnels[*]` add            | spin up new tunnel only |
 | `client.tunnels[*]` edit/remove    | reset that tunnel only (its sub-ctx cancelled, then rebuilt) |
 

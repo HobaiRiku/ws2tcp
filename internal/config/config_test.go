@@ -87,17 +87,15 @@ server:
       secret: s2
 client:
   enabled: true
-  endpoints:
-    - name: e1
-      host: x
-      port: 80
-      path: /c
-      aes_key: "`+validKey+`"
-      client_id: a
-      client_secret: b
+  client_id: a
+  client_secret: b
+  endpoint:
+    host: x
+    port: 80
+    path: /c
+    aes_key: "`+validKey+`"
   tunnels:
     - name: t1
-      endpoint: nope
       listen: "127.0.0.1:1"
       target_host: x
       target_port: 22
@@ -108,7 +106,7 @@ client:
 	}
 	msg := err.Error()
 	for _, want := range []string{
-		"server.aes_key", "duplicated", "endpoint \"nope\" does not match",
+		"server.aes_key", "duplicated",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("missing %q in:\n%s", want, msg)
@@ -141,9 +139,9 @@ app:
 
 func TestParsePortRange(t *testing.T) {
 	cases := []struct {
-		in       string
-		ok       bool
-		lo, hi   uint16
+		in     string
+		ok     bool
+		lo, hi uint16
 	}{
 		{"22", true, 22, 22},
 		{" 8000-8999 ", true, 8000, 8999},

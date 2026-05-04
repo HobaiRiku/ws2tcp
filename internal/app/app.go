@@ -41,7 +41,7 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	cfg := opts.Config
 
-	registry, err := services.New(cfg)
+	registry, err := services.NewWithPaths(cfg, opts.Paths)
 	if err != nil {
 		return fmt.Errorf("services.New: %w", err)
 	}

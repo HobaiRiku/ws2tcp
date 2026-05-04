@@ -83,6 +83,7 @@ func roundTrip(t *testing.T, encrypted bool) {
 	}
 	cfg := &config.Config{
 		Server: srvCfg,
+		Client: config.ClientConfig{Enabled: true, ClientID: "u1", ClientSecret: "s1"},
 		App:    config.AppConfig{HTTPListen: "127.0.0.1:0", HTTPAuth: true, LogLevel: "info"},
 	}
 	reg, err := services.New(cfg)
@@ -103,18 +104,14 @@ func roundTrip(t *testing.T, encrypted bool) {
 
 	// 4. Client-side tunnel pointed at our echo target via the server.
 	ep := config.Endpoint{
-		Name:         "ep1",
-		Host:         srvHost,
-		Port:         srvPort,
-		Path:         "/connect",
-		WSS:          false,
-		AESKey:       k32,
-		ClientID:     "u1",
-		ClientSecret: "s1",
+		Host:   srvHost,
+		Port:   srvPort,
+		Path:   "/connect",
+		WSS:    false,
+		AESKey: k32,
 	}
 	tn := config.Tunnel{
 		Name:       "t1",
-		Endpoint:   "ep1",
 		Listen:     "127.0.0.1:0",
 		TargetHost: echoHost,
 		TargetPort: echoPort,
@@ -129,7 +126,7 @@ func roundTrip(t *testing.T, encrypted bool) {
 	localLn.Close()
 	tn.Listen = localAddr
 
-	tunnel := client.NewTunnel(tn, ep, rt, logger)
+	tunnel := client.NewTunnel(tn, ep, services.ClientCredentials{ClientID: "u1", ClientSecret: "s1"}, rt, logger)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

@@ -7,32 +7,32 @@ restartable.
 
 ## Concepts
 
-- **ServerEndpoint**: a named, reusable bundle of "how to reach a
-  remote ws2tcp server" — host/ip/port/path/wss/aes_key/client
-  credentials. First-class business object owned by
-  `services.Endpoints`. Created and edited independently of tunnels.
-- **Tunnel**: a `(name, endpoint, listen, target_host, target_port)`
-  5-tuple. The `endpoint` field is a **name reference** into the
-  endpoint registry — the tunnel does not embed connection details.
-  Identified by unique `name`.
+- **Client auth**: one `(client_id, client_secret)` pair at client
+  scope, shared by every tunnel in the process — matching the legacy
+  Node client config.
+- **Client endpoint**: one shared upstream ws2tcp-server config
+  `(host, ip, port, path, wss, aes_key, ssl_reject_unauthorized)` at
+  client scope, shared by every tunnel in the process.
+- **Tunnel**: a `(name, listen, target_host, target_port)` tuple.
+  The tunnel does not embed dial details or credentials. Identified by
+  unique `name`.
 - **Connection**: a single end-user TCP session inside a tunnel —
   one accepted local TCP socket and its paired WebSocket. A tunnel
   has 0..N connections at any time.
 - **TunnelManager**: owns the set of running tunnels, exposes
   `Add/Update/Remove/Start/Stop/List` to the services layer. On every
-  start/restart it resolves `tunnel.endpoint → EndpointSpec` from the
-  registry; the resolved snapshot is what handleConn uses for the
-  lifetime of *that* connection.
+  start/restart it resolves the shared client endpoint + client auth
+  snapshot from the registry; that snapshot is what handleConn uses for
+  the lifetime of *that* connection.
 
-### Why a separate object
+### Why keep endpoint at client scope
 
-- Most users have 1–2 servers and many tunnels into them. Embedding
-  the same nine fields per tunnel was a footgun: rotating an
-  `aes_key` meant editing every tunnel.
-- Editing an endpoint is now a single operation that fans out to all
-  consumers via the manager (see "Reload coupling" below).
-- The CLI/UI can show `tunnel → endpoint` as a foreign-key relation
-  and let users pick from a dropdown when creating a tunnel.
+- The legacy client had one upstream server config and one client
+  identity shared by all local forwards.
+- Avoids repeating the same ws host / port / aes key on every tunnel.
+- Editing the shared upstream endpoint becomes one operation that fans
+  out to all running tunnels via the manager (see "Reload coupling"
+  below).
 
 ## Lifecycle
 
@@ -76,11 +76,10 @@ tunnelLoop(ctx, spec):
   }
 ```
 
-`handleConn` mirrors `client.mjs`. It first resolves the named
-endpoint (`ep := endpoints.Get(spec.Endpoint)`) — failing fast if
-the name no longer exists — then:
+`handleConn` mirrors `client.mjs`. It uses the shared client endpoint
+snapshot (`ep := client.Endpoint`) and client auth pair, then:
 
-1. Build the auth string `ep.ClientID:ep.ClientSecret:spec.TargetHost:
+1. Build the auth string `client.ClientID:client.ClientSecret:spec.TargetHost:
    spec.TargetPort:connId`, AES-encrypt with `ep.AESKey`, base64 +
    URL-encode.
 2. `websocket.Dial(ctx, wssURL, &DialOptions{
@@ -148,26 +147,20 @@ and diff-applies tunnels (add / remove / update by name + content
 hash). The diff is computed in `services.Tunnels.Sync(cfg)` so the
 manager sees only individual operations.
 
-### Endpoint-level edits (fan-out)
+### Client-endpoint edits (fan-out)
 
-`services.Endpoints.Update(name, newSpec)` resets every tunnel that
-references this endpoint. Implementation:
+Editing `client.endpoint` resets every tunnel in the client process.
+Implementation:
 
 ```
-affected := tunnels.ListByEndpoint(name)
-for _, t := range affected {
+for _, t := range tunnels.List() {
     manager.Reset(t.Name)        // same path as Tunnels.Update
 }
 ```
 
-This is the central reason `endpoint` is a name reference, not an
-embedded copy: a single rotate-aes-key operation invalidates every
-relevant tunnel atomically without forcing the operator to edit each
-one. Tunnels not referencing the changed endpoint are untouched.
-
-`services.Endpoints.Delete(name)` is rejected if any tunnel still
-references it; the error returns the offending tunnel names so the
-UI can offer "delete these too" as an explicit follow-up.
+This is the central reason the upstream endpoint lives at client scope:
+a single rotate-aes-key operation invalidates every tunnel atomically
+without forcing the operator to edit each one.
 
 ## Observable state for API/UI
 
@@ -176,7 +169,6 @@ UI can offer "delete these too" as an explicit follow-up.
 ```go
 type TunnelStatus struct {
     Name        string
-    Endpoint    string    // referenced endpoint name; surfaced in CLI/UI
     State       string    // running | stopped | failed | degraded
     Listen      string
     Target      string    // "host:port"
@@ -186,10 +178,6 @@ type TunnelStatus struct {
     StartedAt   time.Time
 }
 ```
-
-`Endpoint` is required output: every CLI table and UI list of tunnels
-shows which endpoint it uses, so the foreign-key relationship is
-visible without an extra lookup.
 
 Connections count and byte counters are atomically incremented inside
 `wsproxy.Bridge` via small wrappers around `io.Copy` (we replace the

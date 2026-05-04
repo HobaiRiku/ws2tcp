@@ -181,21 +181,15 @@ func newTestEnv(t *testing.T) *testEnv {
 
 What we cover at this tier:
 
-- `Endpoints.Create` then `Tunnels.Create` referencing it — succeeds.
-- `Tunnels.Create` with unknown endpoint — returns
-  `errEndpointNotFound`, **and** `config.yaml` on disk is unchanged
-  (rollback invariant).
-- `Endpoints.Update` fans out: spin up two tunnels against the same
-  endpoint via an in-process fake ws server, change the endpoint's
-  `aes_key`, assert both tunnels reset and a third unrelated tunnel's
-  connection counter never blips.
-- `Endpoints.Delete` while a tunnel references it returns 409 + the
-  `used_by` list; with `force=true` deletes both atomically.
+- `Tunnels.Create` appends a new tunnel under a valid `client.endpoint`
+  and persists it.
+- Editing `client.endpoint` fans out: spin up two tunnels, change the
+  shared endpoint's `aes_key`, assert both tunnels reset.
 - API tests: same matrix driven through `httptest.NewServer(api.New(reg))`,
   including auth scope enforcement (`server:write` token can't hit
   `client/tunnels`) and the loopback-skip-auth carve-out.
 - Config writer round-trip: load → mutate one field via
-  `services.Endpoints.Update` → reload → assert comments and
+  shared-client config mutation → reload → assert comments and
   unrelated key order in `config.yaml` are preserved (yaml.v3 Node
   golden file).
 
@@ -219,22 +213,20 @@ tests/e2e/
 └── ...
 ```
 
-`Daemon.Cmd("client", "endpoints", "add", ...)` shells out to the
+`Daemon.Cmd("client", "endpoint", "set", ...)` shells out to the
 binary built by `make build-nogui`; it reads stdout JSON when invoked
 with `--json`. The harness writes a fresh `WS2TCP_HOME` per test and
 deletes it on cleanup.
 
 Scenarios — minimum set for v1:
 
-1. **Smoke**: install endpoint + tunnel via CLI, dial the local
+1. **Smoke**: configure client endpoint + tunnel via CLI, dial the local
    listener, write `hello`, expect `hello` back from the echo server
    on the far side. Asserts encrypted and plaintext modes both work.
-2. **Endpoint fan-out**: two tunnels share endpoint `A`, plus one
-   tunnel on endpoint `B`. `PATCH /api/client/endpoints/A` rotates
-   `aes_key`. Expect connections on `A`-using tunnels to terminate
-   and reconnect; `B`-using tunnel's open connection survives unbroken
-   (counters tracked through a long-running echo).
-3. **ACL deny**: server endpoint configured for client `cli1` allows
+2. **Shared-endpoint reload**: two tunnels share one client endpoint.
+   `PUT /api/client/endpoint` rotates `aes_key`. Expect both tunnels'
+   connections to terminate and reconnect.
+3. **ACL deny**: tunnel configured with client `cli1` credentials hits a
    only port 22; tunnel targets port 80; expect upgrade rejected with
    403, structured log captured, daemon stays healthy.
 4. **Replay protection**: replay the same `?command=` URL twice

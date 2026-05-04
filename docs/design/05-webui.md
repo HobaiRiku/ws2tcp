@@ -38,16 +38,12 @@ Kept intentionally small. Six views map 1:1 to API resources:
    editor: each row expands into a CIDR + port-ranges table.
 3. **Server / Connections** — live list, kick action, filter by client
    id / source IP.
-4. **Client / Endpoints** — table of reusable server-endpoint profiles
-   (NAME, HOST:PORT, WSS, CLIENT_ID, USED-BY count). "Used-by" is a
-   click-through to the filtered Tunnels view. Delete is disabled
-   while `used_by > 0` and shows a tooltip listing dependent tunnels.
-5. **Client / Tunnels** — table with columns NAME, ENDPOINT, STATE,
-   LISTEN, TARGET, CONNS. The ENDPOINT cell is a link to the
-   Endpoints page filtered to that name. Create/edit dialog uses a
-   Fluent `<fluent-combobox>` populated from `GET /api/client/endpoints`
-   so users pick rather than type — preventing the "tunnel created
-   before its endpoint" footgun at the UI layer too.
+4. **Client / Endpoint** — one shared upstream server config editor
+   (HOST:PORT, WSS, AES key, TLS verify). Saving resets live tunnels so
+   new connections use the new upstream settings.
+5. **Client / Tunnels** — table with columns NAME, STATE, LISTEN,
+   TARGET, CONNS. Create/edit dialog only asks for tunnel-local fields,
+   since the client endpoint is configured separately once.
 6. **Settings** — `app:` block, token management, `config.yaml` raw
    editor (Monaco) for power users; saving validates server-side via
    `PUT /api/config`.

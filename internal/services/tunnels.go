@@ -6,24 +6,16 @@ import (
 	"websocket2Tcp/internal/config"
 )
 
-// Endpoints returns a snapshot of configured client-side endpoints.
-func (r *Registry) Endpoints() []config.Endpoint {
-	s := r.snap()
-	out := make([]config.Endpoint, 0, len(s.endpoints))
-	for _, ep := range s.endpoints {
-		out = append(out, ep)
-	}
-	return out
+// ClientCredentials is the shared ws2tcp-client authentication pair used by
+// every tunnel handshake in the current client process.
+type ClientCredentials struct {
+	ClientID     string
+	ClientSecret string
 }
 
-// FindEndpoint returns the named endpoint or an error.
-func (r *Registry) FindEndpoint(name string) (config.Endpoint, error) {
-	s := r.snap()
-	ep, ok := s.endpoints[name]
-	if !ok {
-		return config.Endpoint{}, fmt.Errorf("endpoint %q not found", name)
-	}
-	return ep, nil
+// ClientEndpoint returns the shared client-scope upstream endpoint.
+func (r *Registry) ClientEndpoint() config.Endpoint {
+	return r.snap().endpoint
 }
 
 // Tunnels returns a snapshot of configured client-side tunnels.
@@ -45,18 +37,11 @@ func (r *Registry) FindTunnel(name string) (config.Tunnel, error) {
 	return config.Tunnel{}, fmt.Errorf("tunnel %q not found", name)
 }
 
-// ResolveTunnelEndpoint returns the endpoint that backs the named tunnel.
-// Returns an error if either the tunnel or the referenced endpoint is
-// missing — in practice this only fires after a misconfigured Apply.
-func (r *Registry) ResolveTunnelEndpoint(tunnelName string) (config.Tunnel, config.Endpoint, error) {
-	t, err := r.FindTunnel(tunnelName)
-	if err != nil {
-		return config.Tunnel{}, config.Endpoint{}, err
+// ClientCredentials returns the configured client-scope auth pair.
+func (r *Registry) ClientCredentials() ClientCredentials {
+	s := r.snap()
+	return ClientCredentials{
+		ClientID:     s.clientID,
+		ClientSecret: s.clientSecret,
 	}
-	ep, err := r.FindEndpoint(t.Endpoint)
-	if err != nil {
-		return t, config.Endpoint{}, fmt.Errorf("tunnel %q references unknown endpoint %q",
-			tunnelName, t.Endpoint)
-	}
-	return t, ep, nil
 }
