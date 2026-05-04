@@ -32,7 +32,8 @@ PKG := ./...
 PNPM ?= pnpm
 
 .PHONY: all build run dev tidy fmt vet test test-unit test-service test-e2e \
-	web web-install web-dev web-build web-clean clean release print-version
+	web web-install web-dev web-build web-clean web-lint web-lint-fix web-format web-typecheck \
+	clean release print-version
 
 all: web-build build
 
@@ -79,6 +80,18 @@ web-dev:
 
 web-build: web-install
 	cd $(WEB_DIR) && $(PNPM) run build
+
+web-lint:
+	cd $(WEB_DIR) && $(PNPM) run lint
+
+web-lint-fix:
+	cd $(WEB_DIR) && $(PNPM) run lint:fix && $(PNPM) run format
+
+web-format:
+	cd $(WEB_DIR) && $(PNPM) run format
+
+web-typecheck:
+	cd $(WEB_DIR) && $(PNPM) run type-check
 
 web-clean:
 	rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/dist

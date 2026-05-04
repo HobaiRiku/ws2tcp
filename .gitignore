@@ -6,6 +6,7 @@ node_modules
 !web/package.json
 !web/tsconfig.json
 !web/tsconfig.*.json
+!web/.prettierrc.json
 
 # Go
 /bin/
