@@ -1,0 +1,200 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f3f3f3;
+  --surface: #ffffff;
+  --surface-2: #fafafa;
+  --border: #e1e1e1;
+  --text: #1f1f1f;
+  --text-muted: #616161;
+  --accent: #0078d4;
+  --danger: #c4314b;
+  --ok: #107c10;
+  --radius: 6px;
+  font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1b1a19;
+    --surface: #252423;
+    --surface-2: #2d2c2b;
+    --border: #3b3a39;
+    --text: #f3f2f1;
+    --text-muted: #a19f9d;
+    --accent: #4cc2ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  grid-template-rows: 48px 1fr 28px;
+  grid-template-areas:
+    "sidebar header"
+    "sidebar main"
+    "sidebar footer";
+  height: 100vh;
+}
+
+.app-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.app-header .me {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.app-sidebar {
+  grid-area: sidebar;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 1rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.app-sidebar .brand {
+  padding: 0.5rem 0.75rem 1rem;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.app-sidebar a {
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  display: block;
+}
+.app-sidebar a:hover { background: var(--surface-2); text-decoration: none; }
+.app-sidebar a.router-link-active { background: var(--surface-2); color: var(--accent); }
+
+.app-main {
+  grid-area: main;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+.app-footer {
+  grid-area: footer;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  padding: 0 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+.card h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.kvgrid {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 1rem;
+  font-size: 0.875rem;
+}
+.kvgrid dt { color: var(--text-muted); }
+.kvgrid dd { margin: 0; }
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+table.data th, table.data td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+table.data th { color: var(--text-muted); font-weight: 500; }
+table.data tr:last-child td { border-bottom: none; }
+
+.row-actions { display: flex; gap: 0.4rem; }
+.tag {
+  display: inline-block;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  margin-right: 0.25rem;
+}
+
+.banner {
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+.banner.error { background: rgba(196, 49, 75, 0.12); color: var(--danger); }
+.banner.ok { background: rgba(16, 124, 16, 0.12); color: var(--ok); }
+
+.login-wrap {
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+.login-card {
+  width: min(420px, 92vw);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.login-card h1 { margin: 0 0 0.25rem; font-size: 1.25rem; }
+.login-card p.hint { color: var(--text-muted); font-size: 0.85rem; margin: 0 0 1rem; }
+
+fluent-text-field, fluent-button { width: 100%; }
+fluent-button + fluent-button { margin-top: 0.5rem; }
+
+.toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+.toolbar h2 { margin: 0; font-size: 1.05rem; }

@@ -2,7 +2,11 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
+
+	"websocket2Tcp/internal/version"
 )
 
 // rootFlags carries values shared by every subcommand. We keep them on a
@@ -22,9 +26,17 @@ func Root() *cobra.Command {
 			"WS dial), or both, configured via ~/.ws2tcp/config.yaml.",
 		SilenceUsage:  true,
 		SilenceErrors: false,
+		Run: func(c *cobra.Command, _ []string) {
+			if showVer, _ := c.Flags().GetBool("version"); showVer {
+				fmt.Println(version.String())
+				return
+			}
+			_ = c.Help()
+		},
 	}
 	root.PersistentFlags().StringVar(&rootFlags.Home, "home", "",
 		"override WS2TCP_HOME (default $HOME/.ws2tcp)")
+	root.Flags().BoolP("version", "v", false, "print version and exit")
 
 	root.AddCommand(
 		runCmd(),

@@ -21,5 +21,4 @@
 
 ## Left to do
 
-1. `tests-interop`
-   - Go↔Node interop fixtures after legacy payload capture is available
+Deferred for later.

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +14,7 @@ import (
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/services"
 	"websocket2Tcp/internal/services/events"
+	"websocket2Tcp/internal/version"
 )
 
 // Options carries the dependencies needed to build the management router.
@@ -75,11 +75,31 @@ func NewRouter(opts Options) *gin.Engine {
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 	router.GET("/api/version", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"version": buildVersion()})
+		c.JSON(http.StatusOK, version.Current())
 	})
 
 	api := router.Group("/api")
 	readOnly := authorize(opts, services.TokenScopeRead)
+
+	// /api/auth/me — verifies a bearer token and returns its info. Used by
+	// the web UI login flow; requires only the read scope.
+	api.GET("/auth/me", readOnly, func(c *gin.Context) {
+		token := bearerToken(c.GetHeader("Authorization"))
+		if token == "" {
+			token = c.Query("token")
+		}
+		if !opts.RequireAuth {
+			c.JSON(http.StatusOK, gin.H{"name": "anonymous", "scopes": []string{"admin"}, "auth_required": false})
+			return
+		}
+		info, err := opts.Auth.VerifyToken(token, services.TokenScopeRead)
+		if err != nil {
+			writeError(c, classifyStatus(err), "AUTH_FAILED", err)
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"name": info.Name, "scopes": info.Scopes, "auth_required": true})
+	})
+
 	clientWrite := authorize(opts, services.TokenScopeClientWrite)
 	serverWrite := authorize(opts, services.TokenScopeServerWrite)
 	adminOnly := authorize(opts, services.TokenScopeAdmin)
@@ -325,13 +345,6 @@ func NewRouter(opts Options) *gin.Engine {
 	})
 
 	return router
-}
-
-func buildVersion() string {
-	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
-		return info.Main.Version
-	}
-	return "dev"
 }
 
 func redactConfig(cfg *config.Config) *config.Config {

@@ -22,8 +22,8 @@ func TestMountServesIndexAndFallback(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("%s returned %d", path, rr.Code)
 		}
-		if !strings.Contains(rr.Body.String(), "ws2tcp management UI") {
-			t.Fatalf("%s did not serve embedded ui: %s", path, rr.Body.String())
+		if !strings.Contains(rr.Body.String(), "<title>ws2tcp") {
+			t.Fatalf("%s did not serve embedded ui shell: %s", path, rr.Body.String())
 		}
 	}
 }
