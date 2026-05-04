@@ -31,12 +31,12 @@ type Options struct {
 	Logger *slog.Logger
 }
 
-// Run starts every enabled subsystem and blocks until ctx is cancelled,
+// Run starts the configured subsystems and blocks until ctx is cancelled,
 // after which it drains gracefully.
 //
 // Subsystems:
-//   - server (cfg.Server.Enabled): http(s) listener + upgrade handler
-//   - client (cfg.Client.Enabled): N-tunnel manager
+//   - server: http(s) listener + upgrade handler
+//   - client: N-tunnel manager
 //   - api / web ui: management API is started on app.http_listen; web UI lands
 //     in a later slice.
 func Run(ctx context.Context, opts Options) error {
@@ -65,7 +65,7 @@ func Run(ctx context.Context, opts Options) error {
 		}()
 	}
 
-	if cfg.Server.Enabled {
+	if cfg.ServerConfigured() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -75,17 +75,13 @@ func Run(ctx context.Context, opts Options) error {
 		}()
 	}
 
-	if cfg.Client.Enabled {
+	if cfg.ClientConfigured() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			mgr := client.NewManager(registry, runtime, eventBus, opts.Logger)
 			mgr.Run(ctx)
 		}()
-	}
-
-	if !cfg.Server.Enabled && !cfg.Client.Enabled && cfg.App.HTTPListen == "" {
-		opts.Logger.Warn("server, client, and api are all disabled in config; nothing to do")
 	}
 
 	wg.Wait()

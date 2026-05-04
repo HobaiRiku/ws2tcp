@@ -43,7 +43,7 @@ async function logout() {
         <span class="badge" :class="runtime.connected ? 'badge-ok' : 'badge-warn'">
           {{ runtime.connected ? 'Live stream connected' : 'Live stream reconnecting' }}
         </span>
-        <button class="button button-ghost" type="button" @click="logout">Sign out</button>
+        <fluent-button appearance="stealth" @click="logout">Sign out</fluent-button>
       </div>
     </header>
 

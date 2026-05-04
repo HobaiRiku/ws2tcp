@@ -48,7 +48,6 @@ app:
 
 # ─────────────────────── server role ───────────────────────
 server:
-  enabled: true
   listen: "0.0.0.0:3005"        # ws/wss bind
   ws_path: /connect
   ws_host: example.com          # optional Host header gate; "" disables
@@ -76,40 +75,40 @@ server:
 
 # ─────────────────────── client role ───────────────────────
 client:
-  enabled: true
-  client_id: test1
-  client_secret: test1
+  endpoints:
+    - name: prod-ws
+      host: ws.example.com      # used for SNI + Host header; ip is optional dial override
+      ip:   ""
+      port: 3005
+      path: /connect
+      wss:  false
+      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+      ssl_reject_unauthorized: false
 
-  # One shared upstream ws2tcp-server config for this client runtime.
-  endpoint:
-    host: ws.example.com        # used for SNI + Host header
-    ip:   ""                    # optional dial override; falls back to host
-    port: 3005
-    path: /connect
-    wss:  false
-    aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
-    ssl_reject_unauthorized: false
+  clients:
+    - name: prod
+      endpoint: prod-ws
+      client_id: test1
+      client_secret: test1
+      tunnels:
+        - name: ssh-prod
+          listen: "127.0.0.1:2000"
+          target_host: 192.168.1.192
+          target_port: 22
 
-  # A client process holds N tunnels concurrently.
-  # Tunnels carry only tunnel-local settings; the upstream client
-  # credentials and remote server endpoint live once at client scope.
-  tunnels:
-    - name: ssh-prod            # unique, used in CLI/API references
-      listen: "127.0.0.1:2000"
-      target_host: 192.168.1.192
-      target_port: 22
-
-    - name: mysql-stage
-      listen: "127.0.0.1:3307"
-      target_host: 10.0.0.5
-      target_port: 3306
+        - name: mysql-stage
+          listen: "127.0.0.1:3307"
+          target_host: 10.0.0.5
+          target_port: 3306
 ```
 
 Schema-level notes:
 
-- **`client.endpoint` is shared** by every tunnel in the client
-  process. Editing it resets every running tunnel in that client (see
-  `03-client-tunnel-manager.md`).
+- **`client.endpoints[].name` must be unique** and is referenced by
+  `client.clients[].endpoint`.
+- **`client.clients[].name` must be unique**; each client profile owns
+  its own credentials and tunnel set.
+- Editing an endpoint resets only the tunnels that reference it.
 - `aes_key` length is validated at load time (must be exactly 32 bytes
   to match AES-256-CBC); we surface a clear error rather than panicking
   at first encryption.
@@ -156,10 +155,11 @@ Hot reload via fsnotify on `config.yaml`:
 | `app.log_level`                    | live, no restart |
 | `server.*`                         | restart server subsystem (drains existing connections) |
 | `server.clients[*]` add/remove/edit | live: cached user table swapped atomically; **existing connections continue**, but their ACL is re-checked on next dial within the same tunnel — see 02 |
-| `client.enabled` flip              | start or stop the whole client subsystem |
-| `client.endpoint.*` edit           | reset **every tunnel** in the client subsystem |
-| `client.tunnels[*]` add            | spin up new tunnel only |
-| `client.tunnels[*]` edit/remove    | reset that tunnel only (its sub-ctx cancelled, then rebuilt) |
+| `client.endpoints[*]` edit         | reset tunnels that reference the edited endpoint |
+| `client.clients[*]` add/remove     | spin up or tear down that client's tunnels |
+| `client.clients[*].endpoint` edit  | reset every tunnel owned by that client |
+| `client.clients[*].tunnels[*]` add | spin up new tunnel only |
+| `client.clients[*].tunnels[*]` edit/remove | reset that tunnel only (its sub-ctx cancelled, then rebuilt) |
 
 The "reset only its own connections" property is what lets the Web UI
 feel responsive — see [03](./03-client-tunnel-manager.md).

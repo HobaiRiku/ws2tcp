@@ -23,6 +23,13 @@ function readString(value: unknown, key: string) {
   return typeof field === 'string' ? field : ''
 }
 
+function buildEventURL(token: string) {
+  const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const url = new URL('/api/events/ws', `${scheme}//${window.location.host}`)
+  url.searchParams.set('token', token)
+  return url.toString()
+}
+
 export const useRuntimeStore = defineStore('runtime', () => {
   const serverStats = ref<ServerStats | null>(null)
   const tunnelStatusMap = ref<Record<string, TunnelRuntimeStatus>>({})
@@ -134,15 +141,12 @@ export const useRuntimeStore = defineStore('runtime', () => {
   }
 
   function connect() {
-    if (socket || !tokenStore.get()) return
+    const token = tokenStore.get()
+    if (socket || !token) return
     closedManually = false
     clearReconnectTimer()
 
-    const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const url = new URL('/api/events/ws', `${scheme}//${window.location.host}`)
-    url.searchParams.set('token', tokenStore.get())
-
-    socket = new WebSocket(url)
+    socket = new WebSocket(buildEventURL(token))
     socket.onopen = () => {
       connected.value = true
     }

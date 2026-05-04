@@ -37,17 +37,10 @@ async function submit() {
       <p class="hint">Use the fixed management token from <code>config.yaml</code>.</p>
       <div v-if="error" class="banner error">{{ error }}</div>
       <label class="field-label" for="token">Management token</label>
-      <input
-        id="token"
-        v-model="token"
-        class="text-input"
-        type="password"
-        placeholder="Paste token"
-        @keydown.enter="submit"
-      />
-      <button class="button button-primary" type="button" :disabled="busy || !token" @click="submit">
+      <input id="token" v-model="token" class="text-input" type="password" placeholder="Paste token" @keydown.enter="submit" />
+      <fluent-button appearance="accent" :disabled="busy || !token" @click="submit">
         {{ busy ? 'Verifying…' : 'Sign in' }}
-      </button>
+      </fluent-button>
       <p v-if="ver.info" class="login-version">ws2tcp {{ ver.info.version }} · {{ ver.info.commit }}</p>
     </div>
   </div>

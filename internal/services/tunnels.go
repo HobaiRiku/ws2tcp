@@ -38,7 +38,7 @@ func (r *Registry) ClientProfiles() []config.ClientProfile {
 	out := make([]config.ClientProfile, len(s.clientProfiles))
 	copy(out, s.clientProfiles)
 	for i := range out {
-		out[i].Tunnels = append([]config.Tunnel(nil), out[i].Tunnels...)
+		out[i].Tunnels = append([]config.Tunnel{}, out[i].Tunnels...)
 	}
 	return out
 }
@@ -51,7 +51,7 @@ func (r *Registry) FindClientProfile(name string) (config.ClientProfile, error) 
 		return config.ClientProfile{}, fmt.Errorf("client profile %q not found", name)
 	}
 	cp := *profile
-	cp.Tunnels = append([]config.Tunnel(nil), profile.Tunnels...)
+	cp.Tunnels = append([]config.Tunnel{}, profile.Tunnels...)
 	return cp, nil
 }
 

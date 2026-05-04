@@ -13,6 +13,22 @@ type Config struct {
 	Client ClientConfig `yaml:"client" json:"client"`
 }
 
+// ServerConfigured reports whether the server section has enough user-provided
+// data to mean "run the server role" without relying on an explicit enabled bit.
+func (c *Config) ServerConfigured() bool {
+	return c.Server.Listen != "" ||
+		c.Server.AESKey != "" ||
+		c.Server.WSHost != "" ||
+		len(c.Server.Clients) > 0 ||
+		c.Server.TLS.Enabled
+}
+
+// ClientConfigured reports whether the client section has any configured
+// endpoints or profiles and therefore should be validated/run.
+func (c *Config) ClientConfigured() bool {
+	return len(c.Client.Endpoints) > 0 || len(c.Client.Clients) > 0
+}
+
 // AppConfig covers the management plane (HTTP API + Web UI) and shared
 // process settings such as log level.
 type AppConfig struct {
@@ -24,7 +40,6 @@ type AppConfig struct {
 
 // ServerConfig is the ws2tcp-server role (terminate WS, dial target TCP).
 type ServerConfig struct {
-	Enabled       bool             `yaml:"enabled" json:"enabled"`
 	Listen        string           `yaml:"listen" json:"listen"`
 	WSPath        string           `yaml:"ws_path" json:"ws_path"`
 	WSHost        string           `yaml:"ws_host" json:"ws_host"`
@@ -61,7 +76,6 @@ type ACLRule struct {
 // Endpoints are reusable connection profiles; clients own credentials and
 // tunnels, and each client references one endpoint by name.
 type ClientConfig struct {
-	Enabled   bool            `yaml:"enabled" json:"enabled"`
 	Endpoints []Endpoint      `yaml:"endpoints" json:"endpoints"`
 	Clients   []ClientProfile `yaml:"clients" json:"clients"`
 }

@@ -7,8 +7,8 @@
 //  1. accept TCP
 //  2. generate a random clientConnectionId (anti-replay token)
 //  3. build & AES-wrap the ?command= handshake string
-//  4. dial WS to endpoint (URL host = endpoint.host so Host header / SNI
-//     resolve correctly; if endpoint.ip is set, the underlying TCP dial is
+//  4. dial WS to endpoint (URL host = endpoint.host when set, otherwise
+//     endpoint.ip; if endpoint.ip is set, the underlying TCP dial is
 //     redirected there via Transport.DialContext)
 //  5. read first WS message, decrypt it with endpoint.aes_key, decode the
 //     streamUp frame (or accept the legacy "streamUp" plaintext fallback)
@@ -211,9 +211,13 @@ func buildWSURL(ep config.Endpoint, encCmd string) string {
 	if ep.WSS {
 		scheme = "wss"
 	}
+	host := ep.Host
+	if host == "" {
+		host = ep.IP
+	}
 	u := url.URL{
 		Scheme:   scheme,
-		Host:     net.JoinHostPort(ep.Host, strconv.Itoa(ep.Port)),
+		Host:     net.JoinHostPort(host, strconv.Itoa(ep.Port)),
 		Path:     ep.Path,
 		RawQuery: "command=" + url.QueryEscape(encCmd),
 	}

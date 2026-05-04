@@ -29,7 +29,6 @@ func TestLoadMissingFile(t *testing.T) {
 func TestLoadDefaultsAndServerOnly(t *testing.T) {
 	p := writeTemp(t, `
 server:
-  enabled: true
   listen: "0.0.0.0:3005"
   aes_key: "`+validKey+`"
   clients:
@@ -60,7 +59,6 @@ server:
 func TestExplicitFalseOverridesDefault(t *testing.T) {
 	p := writeTemp(t, `
 server:
-  enabled: true
   listen: "0.0.0.0:3005"
   aes_key: "`+validKey+`"
   use_encryption: false
@@ -80,7 +78,6 @@ server:
 func TestValidationErrorsAggregated(t *testing.T) {
 	p := writeTemp(t, `
 server:
-  enabled: true
   listen: "0.0.0.0:3005"
   aes_key: "tooshort"
   clients:
@@ -89,7 +86,6 @@ server:
     - id: u1
       secret: s2
 client:
-  enabled: true
   endpoints:
     - name: edge
       host: x
@@ -191,7 +187,7 @@ func TestParsePortRange(t *testing.T) {
 func TestWriteAtomicAndLoadNodeRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "rt.yaml")
-	body := []byte("server:\n  enabled: true # keep this comment\n")
+	body := []byte("server:\n  listen: 127.0.0.1:3005 # keep this comment\n")
 	if err := WriteAtomic(path, body, 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -41,7 +41,7 @@ function describeEvent(topic: string) {
           actively carrying connections.
         </p>
       </div>
-      <button class="button button-ghost" type="button" @click="runtime.refresh()">Refresh</button>
+      <fluent-button appearance="stealth" @click="runtime.refresh()">Refresh</fluent-button>
     </div>
 
     <div class="stat-grid">

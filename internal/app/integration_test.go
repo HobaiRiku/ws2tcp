@@ -68,7 +68,6 @@ func roundTrip(t *testing.T, encrypted bool) {
 
 	// 2. Server-side config + Registry.
 	srvCfg := config.ServerConfig{
-		Enabled:       true,
 		WSPath:        "/connect",
 		AESKey:        k32,
 		UseEncryption: encrypted,
@@ -84,7 +83,7 @@ func roundTrip(t *testing.T, encrypted bool) {
 	}
 	cfg := &config.Config{
 		Server: srvCfg,
-		Client: config.ClientConfig{Enabled: true},
+		Client: config.ClientConfig{},
 		App:    config.AppConfig{HTTPListen: "127.0.0.1:0", HTTPAuth: true, LogLevel: "info"},
 	}
 	reg, err := services.New(cfg)

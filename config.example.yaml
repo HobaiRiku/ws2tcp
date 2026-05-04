@@ -9,7 +9,6 @@ app:
 
 # ─────────────────────── server role ───────────────────────
 server:
-  enabled: false
   listen: "0.0.0.0:3005"
   ws_path: /connect
   ws_host: ""                     # "" disables Host gate
@@ -34,8 +33,6 @@ server:
 
 # ─────────────────────── client role ───────────────────────
 client:
-  enabled: false
-
   endpoints:
     - name: prod-ws
       host: ws.example.com        # used for SNI + Host header

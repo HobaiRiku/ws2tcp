@@ -57,7 +57,16 @@ func WebSocketHandler(bus *events.Bus) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": "EVENTS_UNAVAILABLE", "message": "event bus not configured"})
 			return
 		}
-		conn, err := websocket.Accept(c.Writer, c.Request, nil)
+		conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
+			OriginPatterns: []string{
+				"localhost",
+				"localhost:*",
+				"127.0.0.1",
+				"127.0.0.1:*",
+				"[::1]",
+				"[::1]:*",
+			},
+		})
 		if err != nil {
 			return
 		}

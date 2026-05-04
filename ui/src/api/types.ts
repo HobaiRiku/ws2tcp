@@ -30,6 +30,15 @@ export type ServerStats = {
   client_connections: Record<string, number>
 }
 
+export type ServerSettings = {
+  listen: string
+  ws_path: string
+  ws_host: string
+  trust_proxy: boolean
+  use_encryption: boolean
+  tls_enabled: boolean
+}
+
 export type Endpoint = {
   name: string
   host: string

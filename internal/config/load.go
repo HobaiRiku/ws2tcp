@@ -33,6 +33,7 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(raw, cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
+	cfg.dropEmptyPlaceholders()
 	cfg.applyZeroDefaults()
 
 	if err := cfg.Validate(); err != nil {
@@ -68,4 +69,55 @@ func (c *Config) applyZeroDefaults() {
 	if c.App.HTTPToken == "" && c.App.HTTPAuth {
 		c.App.HTTPToken = "change-me-management-token"
 	}
+}
+
+func (c *Config) dropEmptyPlaceholders() {
+	c.Server.Clients = filterServerClients(c.Server.Clients)
+	c.Client.Endpoints = filterEndpoints(c.Client.Endpoints)
+	c.Client.Clients = filterClientProfiles(c.Client.Clients)
+}
+
+func filterServerClients(items []ClientIdentity) []ClientIdentity {
+	out := make([]ClientIdentity, 0, len(items))
+	for _, item := range items {
+		if item.ID == "" && item.Secret == "" && len(item.ACL) == 0 {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func filterEndpoints(items []Endpoint) []Endpoint {
+	out := make([]Endpoint, 0, len(items))
+	for _, item := range items {
+		if item.Name == "" && item.Host == "" && item.IP == "" && item.Port == 0 && item.Path == "" && item.AESKey == "" {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func filterClientProfiles(items []ClientProfile) []ClientProfile {
+	out := make([]ClientProfile, 0, len(items))
+	for _, item := range items {
+		item.Tunnels = filterTunnels(item.Tunnels)
+		if item.Name == "" && item.Endpoint == "" && item.ClientID == "" && item.ClientSecret == "" && len(item.Tunnels) == 0 {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func filterTunnels(items []Tunnel) []Tunnel {
+	out := make([]Tunnel, 0, len(items))
+	for _, item := range items {
+		if item.Name == "" && item.Listen == "" && item.TargetHost == "" && item.TargetPort == 0 {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
 }

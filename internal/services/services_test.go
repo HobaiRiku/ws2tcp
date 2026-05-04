@@ -16,7 +16,6 @@ const k32 = "njpjvjkgfykgpqpcksvjydvlctgznlnz"
 func sampleConfig() *config.Config {
 	return &config.Config{
 		Server: config.ServerConfig{
-			Enabled:       true,
 			Listen:        "0.0.0.0:3005",
 			AESKey:        k32,
 			UseEncryption: true,
@@ -33,7 +32,6 @@ func sampleConfig() *config.Config {
 			},
 		},
 		Client: config.ClientConfig{
-			Enabled: true,
 			Endpoints: []config.Endpoint{
 				{Name: "edge", Host: "x", Port: 3005, Path: "/c", AESKey: k32},
 			},
@@ -71,7 +69,6 @@ app:
   http_auth: true
   log_level: info
 server:
-  enabled: true
   listen: "0.0.0.0:3005"
   ws_path: /connect
   aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
@@ -83,7 +80,6 @@ server:
         - cidr: 192.168.1.0/24
           ports: ["22", "80-90"]
 client:
-  enabled: true
   endpoints:
     - name: edge
       host: x

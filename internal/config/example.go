@@ -17,7 +17,6 @@ func Example() *Config {
 			LogLevel:   "info",
 		},
 		Server: ServerConfig{
-			Enabled:       false,
 			Listen:        "0.0.0.0:3005",
 			WSPath:        "/connect",
 			TrustProxy:    false,
@@ -40,7 +39,6 @@ func Example() *Config {
 			},
 		},
 		Client: ClientConfig{
-			Enabled: false,
 			Endpoints: []Endpoint{
 				{
 					Name:                  "prod-ws",

@@ -10,6 +10,7 @@ const endpoints = ref<Endpoint[]>([])
 const error = ref('')
 const success = ref('')
 const busy = ref(false)
+const hiddenInvalidProfiles = ref(0)
 
 const profileDrafts = ref<Record<string, { endpoint: string; client_id: string; client_secret: string }>>({})
 const tunnelDrafts = ref<Record<string, Record<string, Tunnel>>>({})
@@ -63,8 +64,14 @@ async function load() {
     error.value = endpointsErr.message
     return
   }
-  profiles.value = profileData ?? []
-  endpoints.value = endpointData ?? []
+  profiles.value = (profileData ?? [])
+    .filter(item => item.name?.trim())
+    .map(item => ({
+      ...item,
+      tunnels: Array.isArray(item.tunnels) ? item.tunnels : []
+    }))
+  hiddenInvalidProfiles.value = (profileData?.length ?? 0) - profiles.value.length
+  endpoints.value = (endpointData ?? []).filter(item => item.name?.trim())
   syncDrafts()
 }
 
@@ -206,13 +213,16 @@ onMounted(() => {
           state and connection count.
         </p>
       </div>
-      <button class="button button-ghost" type="button" @click="load">Refresh</button>
+      <fluent-button appearance="stealth" @click="load">Refresh</fluent-button>
     </div>
 
     <div v-if="error" class="banner error">{{ error }}</div>
     <div v-if="success" class="banner ok">{{ success }}</div>
+    <div v-if="hiddenInvalidProfiles" class="banner error">
+      Hidden {{ hiddenInvalidProfiles }} invalid client profile entries with empty names.
+    </div>
 
-    <section class="section-card">
+      <section class="section-card">
       <div class="section-head">
         <div>
           <h2>Create client profile</h2>
@@ -222,7 +232,7 @@ onMounted(() => {
       <div class="form-grid four-up">
         <label>
           <span class="field-label">Profile name</span>
-          <input v-model="newProfile.name" class="text-input" placeholder="branch-office" />
+          <input v-model="newProfile.name" class="text-input" />
         </label>
         <label>
           <span class="field-label">Endpoint</span>
@@ -243,9 +253,9 @@ onMounted(() => {
         </label>
       </div>
       <div class="form-actions">
-        <button class="button button-primary" type="button" :disabled="busy" @click="createProfile">
+        <fluent-button appearance="accent" :disabled="busy" @click="createProfile">
           {{ busy ? 'Saving…' : 'Create profile' }}
-        </button>
+        </fluent-button>
       </div>
     </section>
 
@@ -256,9 +266,9 @@ onMounted(() => {
             <h2>{{ profile.name }}</h2>
             <p>{{ profile.tunnels.length }} tunnels · endpoint {{ profile.endpoint }}</p>
           </div>
-          <button class="button button-danger" type="button" @click="removeProfile(profile.name)">
+          <fluent-button appearance="stealth" @click="removeProfile(profile.name)">
             Delete profile
-          </button>
+          </fluent-button>
         </div>
 
         <div class="form-grid three-up">
@@ -286,9 +296,9 @@ onMounted(() => {
         </div>
 
         <div class="form-actions">
-          <button class="button button-primary" type="button" :disabled="busy" @click="saveProfile(profile)">
+          <fluent-button appearance="accent" :disabled="busy" @click="saveProfile(profile)">
             Save profile
-          </button>
+          </fluent-button>
         </div>
 
         <div class="section-head compact">
@@ -326,8 +336,6 @@ onMounted(() => {
                     v-model.number="tunnelDrafts[profile.name][tunnel.name].target_port"
                     class="text-input compact-input compact-port"
                     type="number"
-                    min="1"
-                    max="65535"
                   />
                 </div>
               </td>
@@ -342,12 +350,12 @@ onMounted(() => {
               <td>{{ runtime.tunnelStatus(profile.name, tunnel.name)?.active_connections ?? 0 }}</td>
               <td>
                 <div class="row-actions">
-                  <button class="button button-primary subtle" type="button" @click="saveTunnel(profile.name, tunnel)">
+                  <fluent-button appearance="accent" @click="saveTunnel(profile.name, tunnel)">
                     Save
-                  </button>
-                  <button class="button button-danger subtle" type="button" @click="removeTunnel(profile.name, tunnel.name)">
+                  </fluent-button>
+                  <fluent-button appearance="stealth" @click="removeTunnel(profile.name, tunnel.name)">
                     Delete
-                  </button>
+                  </fluent-button>
                 </div>
               </td>
             </tr>
@@ -374,19 +382,13 @@ onMounted(() => {
             </label>
             <label>
               <span class="field-label">Target port</span>
-              <input
-                v-model.number="newTunnels[profile.name].target_port"
-                class="text-input"
-                type="number"
-                min="1"
-                max="65535"
-              />
+              <input v-model.number="newTunnels[profile.name].target_port" class="text-input" type="number" />
             </label>
           </div>
           <div class="form-actions">
-            <button class="button button-primary" type="button" :disabled="busy" @click="createTunnel(profile.name)">
+            <fluent-button appearance="accent" :disabled="busy" @click="createTunnel(profile.name)">
               Add tunnel
-            </button>
+            </fluent-button>
           </div>
         </div>
       </section>

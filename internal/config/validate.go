@@ -42,12 +42,12 @@ func (c *Config) validateApp() []string {
 }
 
 func (c *Config) validateServer() []string {
-	if !c.Server.Enabled {
+	if !c.ServerConfigured() {
 		return nil
 	}
 	var errs []string
 	if c.Server.Listen == "" {
-		errs = append(errs, "server.listen required when server.enabled")
+		errs = append(errs, "server.listen required")
 	}
 	if err := validateAESKey(c.Server.AESKey); err != nil {
 		errs = append(errs, fmt.Sprintf("server.aes_key: %v", err))
@@ -91,7 +91,7 @@ func (c *Config) validateServer() []string {
 }
 
 func (c *Config) validateClient() []string {
-	if !c.Client.Enabled {
+	if !c.ClientConfigured() {
 		return nil
 	}
 	var errs []string
@@ -106,8 +106,8 @@ func (c *Config) validateClient() []string {
 			errs = append(errs, fmt.Sprintf("%s.name %q duplicated", prefix, ep.Name))
 		}
 		endpointNames[ep.Name] = true
-		if ep.Host == "" {
-			errs = append(errs, prefix+".host required")
+		if ep.Host == "" && ep.IP == "" {
+			errs = append(errs, prefix+".host or .ip required")
 		}
 		if ep.Port <= 0 || ep.Port > 65535 {
 			errs = append(errs, fmt.Sprintf("%s.port out of range: %d", prefix, ep.Port))

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api/client'
 import type { Endpoint } from '@/api/types'
+import { eventChecked } from '@/utils/forms'
 
 type EndpointForm = Endpoint & {
   ip: string
@@ -15,6 +16,7 @@ const error = ref('')
 const success = ref('')
 const busy = ref(false)
 const form = ref(emptyForm())
+const hiddenInvalidCount = ref(0)
 
 const editingExisting = computed(() => selectedName.value !== '')
 
@@ -56,7 +58,9 @@ async function load(preferred = selectedName.value) {
     error.value = err.message
     return
   }
-  list.value = data ?? []
+  const next = (data ?? []).filter(item => item.name?.trim())
+  hiddenInvalidCount.value = (data?.length ?? 0) - next.length
+  list.value = next
   if (preferred && list.value.some(item => item.name === preferred)) {
     applySelection(preferred)
     return
@@ -154,11 +158,14 @@ onMounted(() => {
           Create, update, and retire the shared server endpoints that client profiles attach to.
         </p>
       </div>
-      <button class="button button-ghost" type="button" @click="startCreate">New endpoint</button>
+      <fluent-button appearance="accent" @click="startCreate">New endpoint</fluent-button>
     </div>
 
     <div v-if="error" class="banner error">{{ error }}</div>
     <div v-if="success" class="banner ok">{{ success }}</div>
+    <div v-if="hiddenInvalidCount" class="banner error">
+      Hidden {{ hiddenInvalidCount }} invalid endpoint entries with empty names. Fix them in config if needed.
+    </div>
 
     <div class="workspace-grid">
       <aside class="section-card selection-list">
@@ -204,20 +211,20 @@ onMounted(() => {
             <input v-model="form.name" class="text-input" :disabled="editingExisting" />
           </label>
           <label>
-            <span class="field-label">Host</span>
+            <span class="field-label">Host / SNI name</span>
             <input v-model="form.host" class="text-input" />
           </label>
           <label>
             <span class="field-label">IP override</span>
-            <input v-model="form.ip" class="text-input" placeholder="Optional direct IP" />
+            <input v-model="form.ip" class="text-input" />
           </label>
           <label>
             <span class="field-label">Port</span>
-            <input v-model.number="form.port" class="text-input" type="number" min="1" max="65535" />
+            <input v-model.number="form.port" class="text-input" type="number" />
           </label>
           <label>
             <span class="field-label">Path</span>
-            <input v-model="form.path" class="text-input" placeholder="/connect" />
+            <input v-model="form.path" class="text-input" />
           </label>
           <label>
             <span class="field-label">AES key</span>
@@ -230,27 +237,28 @@ onMounted(() => {
           </label>
         </div>
 
-        <div class="checkbox-row">
-          <label><input v-model="form.wss" type="checkbox" /> Use WSS</label>
-          <label>
-            <input v-model="form.ssl_reject_unauthorized" type="checkbox" />
+        <div class="checkbox-row fluent-switches">
+          <fluent-switch :checked="form.wss" @change="form.wss = eventChecked($event)">Use WSS</fluent-switch>
+          <fluent-switch
+            :checked="form.ssl_reject_unauthorized"
+            @change="form.ssl_reject_unauthorized = eventChecked($event)"
+          >
             Verify server TLS certificate
-          </label>
+          </fluent-switch>
         </div>
 
         <div class="form-actions">
-          <button class="button button-primary" type="button" :disabled="busy" @click="save">
+          <fluent-button appearance="accent" :disabled="busy" @click="save">
             {{ busy ? 'Saving…' : editingExisting ? 'Save changes' : 'Create endpoint' }}
-          </button>
-          <button
+          </fluent-button>
+          <fluent-button
             v-if="editingExisting"
-            class="button button-danger"
-            type="button"
             :disabled="busy"
+            appearance="stealth"
             @click="removeEndpoint"
           >
             Delete endpoint
-          </button>
+          </fluent-button>
         </div>
       </section>
     </div>

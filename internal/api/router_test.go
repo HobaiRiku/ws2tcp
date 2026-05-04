@@ -220,6 +220,18 @@ func TestServerClientEndpointsAndStats(t *testing.T) {
 		t.Fatalf("unexpected acl put response: %d %s", rr.Code, rr.Body.String())
 	}
 
+	rr = performJSON(t, router, http.MethodGet, "/api/server/settings", token, nil)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"use_encryption":true`) {
+		t.Fatalf("unexpected server settings response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodPatch, "/api/server/settings", token, serverSettingsPatchRequest{
+		UseEncryption: boolPtr(false),
+	})
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"use_encryption":false`) {
+		t.Fatalf("unexpected server settings patch response: %d %s", rr.Code, rr.Body.String())
+	}
+
 	rr = performJSON(t, router, http.MethodGet, "/api/server/stats", token, nil)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"uptime_seconds":`) {
 		t.Fatalf("unexpected stats response: %d %s", rr.Code, rr.Body.String())
@@ -236,6 +248,9 @@ func TestServerClientEndpointsAndStats(t *testing.T) {
 	}
 	if len(cfg.Server.Clients) != 1 || cfg.Server.Clients[0].ID != "u2" || cfg.Server.Clients[0].Secret != "rotated" {
 		t.Fatalf("unexpected clients after api update: %+v", cfg.Server.Clients)
+	}
+	if cfg.Server.UseEncryption {
+		t.Fatalf("expected patched server.use_encryption=false, got: %+v", cfg.Server)
 	}
 }
 
@@ -310,6 +325,34 @@ func TestEventStreamAndWebSocketEndpoints(t *testing.T) {
 	}
 }
 
+func TestEventWebSocketAllowsLoopbackDevOrigin(t *testing.T) {
+	router, _, token, bus, _ := newTestRouter(t, true)
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/events/ws?token=" + token + "&topic=tunnel.state"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{
+		HTTPHeader: http.Header{
+			"Origin": []string{"http://127.0.0.1:5266"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	bus.Emit("tunnel.state", map[string]any{"client": "prod", "tunnel": "ssh", "state": "listening"})
+	_, raw, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"topic":"tunnel.state"`) {
+		t.Fatalf("unexpected ws payload: %s", string(raw))
+	}
+}
+
 func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, string, *events.Bus, *services.Runtime) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
@@ -328,7 +371,6 @@ func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, st
   http_token: ` + testHTTPToken + `
   log_level: info
 server:
-  enabled: true
   listen: "0.0.0.0:3005"
   ws_path: /connect
   aes_key: "` + testAESKey + `"
@@ -337,7 +379,6 @@ server:
     - id: u1
       secret: s1
 client:
-  enabled: true
   endpoints:
     - name: edge
       host: x

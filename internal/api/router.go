@@ -67,6 +67,19 @@ type serverStatsResponse struct {
 	ClientConnections map[string]int32 `json:"client_connections"`
 }
 
+type serverSettingsResponse struct {
+	Listen        string `json:"listen"`
+	WSPath        string `json:"ws_path"`
+	WSHost        string `json:"ws_host"`
+	TrustProxy    bool   `json:"trust_proxy"`
+	UseEncryption bool   `json:"use_encryption"`
+	TLSEnabled    bool   `json:"tls_enabled"`
+}
+
+type serverSettingsPatchRequest struct {
+	UseEncryption *bool `json:"use_encryption"`
+}
+
 type clientRuntimeResponse struct {
 	Tunnels []services.TunnelStatus `json:"tunnels"`
 }
@@ -340,6 +353,35 @@ func NewRouter(opts Options) *gin.Engine {
 	api.GET("/server/clients", readOnly, func(c *gin.Context) {
 		c.JSON(http.StatusOK, redactIdentities(opts.Registry.Identities()))
 	})
+	api.GET("/server/settings", readOnly, func(c *gin.Context) {
+		cfg, err := config.Load(opts.Registry.ConfigPath())
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "CONFIG_LOAD_FAILED", err)
+			return
+		}
+		c.JSON(http.StatusOK, serverSettings(cfg.Server))
+	})
+	api.PATCH("/server/settings", serverWrite, func(c *gin.Context) {
+		var req serverSettingsPatchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		if req.UseEncryption == nil {
+			writeError(c, http.StatusBadRequest, "EMPTY_PATCH", errors.New("no server settings provided"))
+			return
+		}
+		if err := opts.Registry.SetConfigValue("server.use_encryption", strconv.FormatBool(*req.UseEncryption)); err != nil {
+			writeError(c, classifyStatus(err), "SET_SERVER_SETTINGS_FAILED", err)
+			return
+		}
+		cfg, err := config.Load(opts.Registry.ConfigPath())
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "CONFIG_LOAD_FAILED", err)
+			return
+		}
+		c.JSON(http.StatusOK, serverSettings(cfg.Server))
+	})
 	api.POST("/server/clients", serverWrite, func(c *gin.Context) {
 		var client config.ClientIdentity
 		if err := c.ShouldBindJSON(&client); err != nil {
@@ -461,7 +503,7 @@ func redactEndpoints(endpoints []config.Endpoint) []config.Endpoint {
 func redactClientProfile(profile config.ClientProfile) config.ClientProfile {
 	cp := profile
 	cp.ClientSecret = ""
-	cp.Tunnels = append([]config.Tunnel(nil), profile.Tunnels...)
+	cp.Tunnels = append([]config.Tunnel{}, profile.Tunnels...)
 	return cp
 }
 
@@ -486,6 +528,17 @@ func redactIdentities(identities []services.Identity) []gin.H {
 		out[i] = redactIdentity(identity)
 	}
 	return out
+}
+
+func serverSettings(cfg config.ServerConfig) serverSettingsResponse {
+	return serverSettingsResponse{
+		Listen:        cfg.Listen,
+		WSPath:        cfg.WSPath,
+		WSHost:        cfg.WSHost,
+		TrustProxy:    cfg.TrustProxy,
+		UseEncryption: cfg.UseEncryption,
+		TLSEnabled:    cfg.TLS.Enabled,
+	}
 }
 
 func identityACL(identity services.Identity) []gin.H {

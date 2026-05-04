@@ -1,0 +1,1 @@
+function e(e){return!!e.target.checked}export{e as t};

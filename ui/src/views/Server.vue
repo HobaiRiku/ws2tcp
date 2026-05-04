@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api/client'
-import type { ACLRule, ServerClient } from '@/api/types'
+import type { ACLRule, ServerClient, ServerSettings } from '@/api/types'
 import { useRuntimeStore } from '@/stores/runtime'
+import { eventChecked } from '@/utils/forms'
 
 const runtime = useRuntimeStore()
 const list = ref<ServerClient[]>([])
@@ -11,6 +12,7 @@ const success = ref('')
 const drafts = ref<Record<string, { secret: string; aclText: string }>>({})
 const newClient = ref({ id: '', secret: '', aclText: '' })
 const busy = ref(false)
+const settings = ref<ServerSettings | null>(null)
 
 function aclToText(acl: ACLRule[]) {
   return acl.map(rule => `${rule.cidr} ${rule.ports.join(',') || '*'}`).join('\n')
@@ -47,6 +49,11 @@ async function load() {
   }
   list.value = data ?? []
   syncDrafts()
+
+  const [settingsErr, settingsData] = await api.get<ServerSettings>('/api/server/settings')
+  if (!settingsErr && settingsData) {
+    settings.value = settingsData
+  }
 }
 
 async function createClient() {
@@ -103,6 +110,21 @@ async function removeClient(id: string) {
   await load()
 }
 
+async function saveServerSettings() {
+  if (!settings.value) return
+  error.value = ''
+  success.value = ''
+  const [err] = await api.patch('/api/server/settings', {
+    use_encryption: settings.value.use_encryption
+  })
+  if (err) {
+    error.value = err.message
+    return
+  }
+  success.value = 'Server settings updated.'
+  await load()
+}
+
 function connectionCount(id: string) {
   return runtime.serverStats?.client_connections?.[id] ?? 0
 }
@@ -136,6 +158,35 @@ onMounted(() => {
     <div v-if="error" class="banner error">{{ error }}</div>
     <div v-if="success" class="banner ok">{{ success }}</div>
 
+    <section v-if="settings" class="section-card">
+      <div class="section-head">
+        <div>
+          <h2>Server transport settings</h2>
+          <p>Visibility for core server transport behaviour, including data-plane encryption.</p>
+        </div>
+      </div>
+      <div class="server-settings-grid">
+        <div class="settings-summary">
+          <div><span class="field-label">Listen</span><strong>{{ settings.listen }}</strong></div>
+          <div><span class="field-label">WS path</span><strong>{{ settings.ws_path }}</strong></div>
+          <div><span class="field-label">WS host</span><strong>{{ settings.ws_host || 'disabled' }}</strong></div>
+          <div><span class="field-label">TLS</span><strong>{{ settings.tls_enabled ? 'enabled' : 'disabled' }}</strong></div>
+        </div>
+        <div class="checkbox-row fluent-switches">
+          <fluent-switch
+            :checked="settings.use_encryption"
+            @change="settings.use_encryption = eventChecked($event)"
+          >
+            Data-plane end-to-end encryption
+          </fluent-switch>
+          <fluent-switch :checked="settings.trust_proxy" disabled>Trust proxy headers</fluent-switch>
+        </div>
+        <div class="form-actions">
+          <fluent-button appearance="accent" @click="saveServerSettings">Save server settings</fluent-button>
+        </div>
+      </div>
+    </section>
+
     <section class="section-card">
       <div class="section-head">
         <div>
@@ -146,7 +197,7 @@ onMounted(() => {
       <div class="form-grid three-up">
         <label>
           <span class="field-label">Client ID</span>
-          <input v-model="newClient.id" class="text-input" placeholder="branch-office" />
+          <input v-model="newClient.id" class="text-input" />
         </label>
         <label>
           <span class="field-label">Shared secret</span>
@@ -163,9 +214,9 @@ onMounted(() => {
         </label>
       </div>
       <div class="form-actions">
-        <button class="button button-primary" type="button" :disabled="busy" @click="createClient">
+        <fluent-button appearance="accent" :disabled="busy" @click="createClient">
           {{ busy ? 'Saving…' : 'Create server client' }}
-        </button>
+        </fluent-button>
       </div>
     </section>
 
@@ -181,9 +232,9 @@ onMounted(() => {
               {{ connectionCount(client.id) }} live connections
             </p>
           </div>
-          <button class="button button-danger" type="button" @click="removeClient(client.id)">
+          <fluent-button appearance="stealth" @click="removeClient(client.id)">
             Delete
-          </button>
+          </fluent-button>
         </div>
 
         <div class="form-grid two-up">
@@ -203,9 +254,9 @@ onMounted(() => {
         </div>
 
         <div class="form-actions">
-          <button class="button button-primary" type="button" :disabled="busy" @click="saveClient(client)">
+          <fluent-button appearance="accent" :disabled="busy" @click="saveClient(client)">
             Save changes
-          </button>
+          </fluent-button>
         </div>
       </section>
 

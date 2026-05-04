@@ -93,7 +93,6 @@ func writeTestConfig(t *testing.T) string {
   http_auth: true
   log_level: info
 server:
-  enabled: true
   listen: "0.0.0.0:3005"
   ws_path: /connect
   aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
@@ -102,7 +101,6 @@ server:
     - id: u1
       secret: s1
 client:
-  enabled: true
   endpoints:
     - name: edge
       host: x
