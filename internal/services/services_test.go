@@ -461,3 +461,69 @@ func TestDeleteTunnelPersistsAndApplies(t *testing.T) {
 		}
 	}
 }
+
+func TestSetClientCredentialsPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	if err := r.SetClientCredentials("rotated-id", "rotated-secret"); err != nil {
+		t.Fatal(err)
+	}
+
+	creds := r.ClientCredentials()
+	if creds.ClientID != "rotated-id" || creds.ClientSecret != "rotated-secret" {
+		t.Fatalf("unexpected credentials after update: %+v", creds)
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "client_id: rotated-id") || !strings.Contains(text, "client_secret: rotated-secret") {
+		t.Fatal("updated client auth not written to config")
+	}
+}
+
+func TestSetConfigValuePersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	if err := r.SetConfigValue("app.log_level", "debug"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetConfigValue("client.endpoint.port", "8443"); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "log_level: debug") || !strings.Contains(text, "port: 8443") {
+		t.Fatal("updated config values not written to config")
+	}
+}
+
+func TestSetConfigValueRollsBackOnInvalidConfig(t *testing.T) {
+	r, p := newStoredRegistry(t)
+	before, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = r.SetConfigValue("client.endpoint.port", "70000")
+	if err == nil {
+		t.Fatal("expected invalid config set error")
+	}
+
+	after, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("config file was not rolled back after invalid scalar update")
+	}
+	if r.ClientEndpoint().Port != 3005 {
+		t.Fatal("live registry changed after failed config update")
+	}
+}
