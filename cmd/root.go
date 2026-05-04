@@ -34,6 +34,7 @@ func Root() *cobra.Command {
 		stopCmd(),
 		statusCmd(),
 		clientCmd(),
+		serverCmd(),
 		versionCmd(),
 	)
 	return root
