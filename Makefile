@@ -1,10 +1,10 @@
 # ws2tcp — top-level Makefile
 #
 # Build pipeline:
-#   make web-install   # 一次性: 装前端依赖 (pnpm)
-#   make web-build     # 构建 SPA 到 internal/web/static/
+#   make ui-install    # 一次性: 装前端依赖 (pnpm)
+#   make ui-build      # 构建 SPA 到 internal/web/static/
 #   make build         # 构建 Go 二进制 (注入 git 版本到 ldflags)
-#   make all           # 等价 web-build + build
+#   make all           # 等价 ui-build + build
 #
 # 版本注入: -ldflags "-X websocket2Tcp/internal/version.Version=..." 等等。
 # CLI: ws2tcp -v / ws2tcp version
@@ -23,20 +23,21 @@ LDFLAGS := -s -w \
 	-X $(PKG_VERSION).BuildDate=$(DATE)
 
 BUILD_DIR := build/bin
-WEB_DIR   := web
+UI_DIR    := ui
 EMBED_DIR := internal/web/static
 LOCAL_HOME := $(CURDIR)/.ws2tcp-home
 
 PKG := ./...
 
-# 前端统一使用 pnpm. corepack 自动 pin 到 web/package.json 的 packageManager.
+# 前端统一使用 pnpm. corepack 自动 pin 到 ui/package.json 的 packageManager.
 PNPM ?= pnpm
 
 .PHONY: all build run dev tidy fmt vet test test-unit test-service test-e2e \
+	ui ui-install ui-dev ui-build ui-clean ui-lint ui-lint-fix ui-format ui-typecheck \
 	web web-install web-dev web-build web-clean web-lint web-lint-fix web-format web-typecheck \
 	clean release print-version
 
-all: web-build build
+all: ui-build build
 
 # ---- Go --------------------------------------------------------------------
 
@@ -71,35 +72,45 @@ test-e2e:
 	@mkdir -p $(LOCAL_HOME)
 	@echo "TODO: Go<->Node interop tests under tests/interop/"
 
-# ---- Web -------------------------------------------------------------------
+# ---- UI --------------------------------------------------------------------
 
-web: web-build
+ui: ui-build
 
-web-install:
-	cd $(WEB_DIR) && $(PNPM) install
+ui-install:
+	cd $(UI_DIR) && $(PNPM) install
 
-web-dev:
-	cd $(WEB_DIR) && $(PNPM) run dev
+ui-dev:
+	cd $(UI_DIR) && $(PNPM) run dev
 
-web-build: web-install
-	cd $(WEB_DIR) && $(PNPM) run build
+ui-build: ui-install
+	cd $(UI_DIR) && $(PNPM) run build
 
-web-lint:
-	cd $(WEB_DIR) && $(PNPM) run lint
+ui-lint:
+	cd $(UI_DIR) && $(PNPM) run lint
 
-web-lint-fix:
-	cd $(WEB_DIR) && $(PNPM) run lint:fix && $(PNPM) run format
+ui-lint-fix:
+	cd $(UI_DIR) && $(PNPM) run lint:fix && $(PNPM) run format
 
-web-format:
-	cd $(WEB_DIR) && $(PNPM) run format
+ui-format:
+	cd $(UI_DIR) && $(PNPM) run format
 
-web-typecheck:
-	cd $(WEB_DIR) && $(PNPM) run type-check
+ui-typecheck:
+	cd $(UI_DIR) && $(PNPM) run type-check
 
-web-clean:
-	rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/dist
+ui-clean:
+	rm -rf $(UI_DIR)/node_modules $(UI_DIR)/dist
 	# 保留 placeholder index.html 让 go test 在没构建前端时也通过
 	find $(EMBED_DIR) -type f ! -name 'index.html' -delete 2>/dev/null || true
+
+web: ui
+web-install: ui-install
+web-dev: ui-dev
+web-build: ui-build
+web-lint: ui-lint
+web-lint-fix: ui-lint-fix
+web-format: ui-format
+web-typecheck: ui-typecheck
+web-clean: ui-clean
 
 # ---- Misc ------------------------------------------------------------------
 

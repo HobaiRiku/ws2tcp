@@ -44,11 +44,31 @@ type clientPatchRequest struct {
 	ACL    *[]config.ACLRule `json:"acl"`
 }
 
+type endpointPatchRequest struct {
+	Host                  *string `json:"host"`
+	IP                    *string `json:"ip"`
+	Port                  *int    `json:"port"`
+	Path                  *string `json:"path"`
+	WSS                   *bool   `json:"wss"`
+	AESKey                *string `json:"aes_key"`
+	SSLRejectUnauthorized *bool   `json:"ssl_reject_unauthorized"`
+}
+
+type clientProfilePatchRequest struct {
+	Endpoint     *string `json:"endpoint"`
+	ClientID     *string `json:"client_id"`
+	ClientSecret *string `json:"client_secret"`
+}
+
 type serverStatsResponse struct {
 	BytesIn           uint64           `json:"bytes_in"`
 	BytesOut          uint64           `json:"bytes_out"`
 	UptimeSeconds     int64            `json:"uptime_seconds"`
 	ClientConnections map[string]int32 `json:"client_connections"`
+}
+
+type clientRuntimeResponse struct {
+	Tunnels []services.TunnelStatus `json:"tunnels"`
 }
 
 // NewRouter builds the base management REST API.
@@ -125,6 +145,19 @@ func NewRouter(opts Options) *gin.Engine {
 	api.GET("/client/endpoints", readOnly, func(c *gin.Context) {
 		c.JSON(http.StatusOK, redactEndpoints(opts.Registry.Endpoints()))
 	})
+	api.POST("/client/endpoints", clientWrite, func(c *gin.Context) {
+		var endpoint config.Endpoint
+		if err := c.ShouldBindJSON(&endpoint); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		if err := opts.Registry.CreateEndpoint(endpoint); err != nil {
+			writeError(c, classifyStatus(err), "CREATE_ENDPOINT_FAILED", err)
+			return
+		}
+		created, _ := opts.Registry.FindEndpoint(endpoint.Name)
+		c.JSON(http.StatusCreated, redactEndpoint(created))
+	})
 	api.GET("/client/endpoints/:endpoint", readOnly, func(c *gin.Context) {
 		endpoint, err := opts.Registry.FindEndpoint(c.Param("endpoint"))
 		if err != nil {
@@ -133,8 +166,54 @@ func NewRouter(opts Options) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, redactEndpoint(endpoint))
 	})
+	api.PATCH("/client/endpoints/:endpoint", clientWrite, func(c *gin.Context) {
+		var req endpointPatchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		patch := services.EndpointPatch{
+			Host:                  req.Host,
+			IP:                    req.IP,
+			Port:                  req.Port,
+			Path:                  req.Path,
+			WSS:                   req.WSS,
+			AESKey:                req.AESKey,
+			SSLRejectUnauthorized: req.SSLRejectUnauthorized,
+		}
+		if patch.Host == nil && patch.IP == nil && patch.Port == nil && patch.Path == nil && patch.WSS == nil && patch.AESKey == nil && patch.SSLRejectUnauthorized == nil {
+			writeError(c, http.StatusBadRequest, "EMPTY_PATCH", errors.New("no endpoint fields provided"))
+			return
+		}
+		if err := opts.Registry.UpdateEndpoint(c.Param("endpoint"), patch); err != nil {
+			writeError(c, classifyStatus(err), "UPDATE_ENDPOINT_FAILED", err)
+			return
+		}
+		endpoint, _ := opts.Registry.FindEndpoint(c.Param("endpoint"))
+		c.JSON(http.StatusOK, redactEndpoint(endpoint))
+	})
+	api.DELETE("/client/endpoints/:endpoint", clientWrite, func(c *gin.Context) {
+		if err := opts.Registry.DeleteEndpoint(c.Param("endpoint")); err != nil {
+			writeError(c, classifyStatus(err), "DELETE_ENDPOINT_FAILED", err)
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
 	api.GET("/client/profiles", readOnly, func(c *gin.Context) {
 		c.JSON(http.StatusOK, redactClientProfiles(opts.Registry.ClientProfiles()))
+	})
+	api.POST("/client/profiles", clientWrite, func(c *gin.Context) {
+		var profile config.ClientProfile
+		if err := c.ShouldBindJSON(&profile); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		if err := opts.Registry.CreateClientProfile(profile); err != nil {
+			writeError(c, classifyStatus(err), "CREATE_CLIENT_PROFILE_FAILED", err)
+			return
+		}
+		created, _ := opts.Registry.FindClientProfile(profile.Name)
+		c.JSON(http.StatusCreated, redactClientProfile(created))
 	})
 	api.GET("/client/profiles/:name", readOnly, func(c *gin.Context) {
 		profile, err := opts.Registry.FindClientProfile(c.Param("name"))
@@ -143,6 +222,38 @@ func NewRouter(opts Options) *gin.Engine {
 			return
 		}
 		c.JSON(http.StatusOK, redactClientProfile(profile))
+	})
+	api.PATCH("/client/profiles/:name", clientWrite, func(c *gin.Context) {
+		var req clientProfilePatchRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		patch := services.ClientProfilePatch{
+			Endpoint:     req.Endpoint,
+			ClientID:     req.ClientID,
+			ClientSecret: req.ClientSecret,
+		}
+		if patch.Endpoint == nil && patch.ClientID == nil && patch.ClientSecret == nil {
+			writeError(c, http.StatusBadRequest, "EMPTY_PATCH", errors.New("no client profile fields provided"))
+			return
+		}
+		if err := opts.Registry.UpdateClientProfile(c.Param("name"), patch); err != nil {
+			writeError(c, classifyStatus(err), "UPDATE_CLIENT_PROFILE_FAILED", err)
+			return
+		}
+		profile, _ := opts.Registry.FindClientProfile(c.Param("name"))
+		c.JSON(http.StatusOK, redactClientProfile(profile))
+	})
+	api.DELETE("/client/profiles/:name", clientWrite, func(c *gin.Context) {
+		if err := opts.Registry.DeleteClientProfile(c.Param("name")); err != nil {
+			writeError(c, classifyStatus(err), "DELETE_CLIENT_PROFILE_FAILED", err)
+			return
+		}
+		c.Status(http.StatusNoContent)
+	})
+	api.GET("/client/runtime", readOnly, func(c *gin.Context) {
+		c.JSON(http.StatusOK, clientRuntimeResponse{Tunnels: opts.Runtime.TunnelStatuses()})
 	})
 
 	clientAPI := api.Group("/client/:name")

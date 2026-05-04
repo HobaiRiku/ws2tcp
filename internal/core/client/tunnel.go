@@ -52,19 +52,20 @@ const (
 // drive with Run(ctx); cancelling ctx tears the listener and all live
 // connections down.
 type Tunnel struct {
-	cfg     config.Tunnel
-	ep      config.Endpoint
-	auth    services.ClientCredentials
-	runtime *services.Runtime
-	events  *events.Bus
-	log     *slog.Logger
+	clientName string
+	cfg        config.Tunnel
+	ep         config.Endpoint
+	auth       services.ClientCredentials
+	runtime    *services.Runtime
+	events     *events.Bus
+	log        *slog.Logger
 }
 
 // NewTunnel binds a tunnel to its resolved endpoint snapshot. The endpoint
 // is captured by value so a later edit (handled at the manager level via
 // Apply) won't half-update an in-flight tunnel.
-func NewTunnel(t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials, rt *services.Runtime, bus *events.Bus, log *slog.Logger) *Tunnel {
-	return &Tunnel{cfg: t, ep: ep, auth: auth, runtime: rt, events: bus, log: log.With("tunnel", t.Name)}
+func NewTunnel(clientName string, t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials, rt *services.Runtime, bus *events.Bus, log *slog.Logger) *Tunnel {
+	return &Tunnel{clientName: clientName, cfg: t, ep: ep, auth: auth, runtime: rt, events: bus, log: log.With("tunnel", t.Name)}
 }
 
 // Run starts the local TCP listener and serves accepts until ctx is done.
@@ -76,7 +77,9 @@ func (t *Tunnel) Run(ctx context.Context) error {
 		return fmt.Errorf("listen %s: %w", t.cfg.Listen, err)
 	}
 	t.log.Info("tunnel listening", "listen", t.cfg.Listen, "endpoint_host", t.ep.Host)
+	t.runtime.SetTunnelState(t.clientName, t.cfg.Name, t.ep.Name, t.cfg.Listen, "listening", "")
 	t.events.Emit("tunnel.state", map[string]any{
+		"client":   t.clientName,
 		"tunnel":   t.cfg.Name,
 		"listen":   t.cfg.Listen,
 		"endpoint": t.ep.Name,
@@ -150,6 +153,9 @@ func (t *Tunnel) handleConn(ctx context.Context, tcp net.Conn) {
 	pingCtx, stopPing := context.WithCancel(ctx)
 	defer stopPing()
 	go runPinger(pingCtx, wsConn, t.log)
+
+	t.runtime.IncTunnelConnections(t.clientName, t.cfg.Name, t.ep.Name, t.cfg.Listen)
+	defer t.runtime.DecTunnelConnections(t.clientName, t.cfg.Name)
 
 	netConn := websocket.NetConn(ctx, wsConn, websocket.MessageBinary)
 	if err := wsproxy.Bridge(ctx, netConn, tcp, useEnc, e2eKey); err != nil {

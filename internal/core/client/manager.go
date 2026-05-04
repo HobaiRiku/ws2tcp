@@ -115,15 +115,31 @@ func (m *Manager) startLocked(binding services.ClientTunnelBinding) {
 	}
 	m.running[binding.Key] = rt
 
+	m.runtime.SetTunnelState(
+		binding.ClientName,
+		binding.Tunnel.Name,
+		binding.Endpoint.Name,
+		binding.Tunnel.Listen,
+		"starting",
+		"",
+	)
 	m.events.Emit("tunnel.state", map[string]any{
 		"client": binding.ClientName,
 		"tunnel": binding.Tunnel.Name,
 		"state":  "starting",
 	})
-	tunnel := NewTunnel(binding.Tunnel, binding.Endpoint, binding.Credentials, m.runtime, m.events, m.log.With("client", binding.ClientName))
+	tunnel := NewTunnel(binding.ClientName, binding.Tunnel, binding.Endpoint, binding.Credentials, m.runtime, m.events, m.log.With("client", binding.ClientName))
 	go func() {
 		defer close(rt.done)
 		if err := tunnel.Run(tCtx); err != nil {
+			m.runtime.SetTunnelState(
+				binding.ClientName,
+				binding.Tunnel.Name,
+				binding.Endpoint.Name,
+				binding.Tunnel.Listen,
+				"error",
+				err.Error(),
+			)
 			m.events.Emit("tunnel.state", map[string]any{
 				"client": binding.ClientName,
 				"tunnel": binding.Tunnel.Name,
@@ -133,6 +149,14 @@ func (m *Manager) startLocked(binding services.ClientTunnelBinding) {
 			m.log.Error("tunnel exited with error", "client", binding.ClientName, "tunnel", binding.Tunnel.Name, "err", err)
 			return
 		}
+		m.runtime.SetTunnelState(
+			binding.ClientName,
+			binding.Tunnel.Name,
+			binding.Endpoint.Name,
+			binding.Tunnel.Listen,
+			"stopped",
+			"",
+		)
 		m.events.Emit("tunnel.state", map[string]any{
 			"client": binding.ClientName,
 			"tunnel": binding.Tunnel.Name,

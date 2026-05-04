@@ -26,7 +26,7 @@ const testAESKey = "njpjvjkgfykgpqpcksvjydvlctgznlnz"
 const testHTTPToken = "test-management-token"
 
 func TestHealthVersionAndConfigEndpoints(t *testing.T) {
-	router, p, token, _ := newTestRouter(t, true)
+	router, p, token, _, _ := newTestRouter(t, true)
 
 	rr := performJSON(t, router, http.MethodGet, "/api/health", "", nil)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"ok":true`) {
@@ -60,7 +60,7 @@ func TestHealthVersionAndConfigEndpoints(t *testing.T) {
 }
 
 func TestAuthEndpointsUseConfiguredToken(t *testing.T) {
-	router, _, token, _ := newTestRouter(t, true)
+	router, _, token, _, _ := newTestRouter(t, true)
 
 	rr := performJSON(t, router, http.MethodGet, "/api/auth/me", "", nil)
 	if rr.Code != http.StatusUnauthorized {
@@ -74,7 +74,7 @@ func TestAuthEndpointsUseConfiguredToken(t *testing.T) {
 }
 
 func TestClientEndpoints(t *testing.T) {
-	router, p, token, _ := newTestRouter(t, true)
+	router, p, token, _, runtime := newTestRouter(t, true)
 
 	rr := performJSON(t, router, http.MethodGet, "/api/client/endpoints", token, nil)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"edge"`) {
@@ -84,17 +84,45 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("endpoint aes key leaked: %s", rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodPut, "/api/client/prod/endpoint", token, config.Endpoint{
-		Host:                  "api.example.com",
-		IP:                    "198.51.100.20",
-		Port:                  8443,
-		Path:                  "/edge",
-		WSS:                   true,
-		AESKey:                testAESKey,
-		SSLRejectUnauthorized: true,
+	rr = performJSON(t, router, http.MethodPost, "/api/client/endpoints", token, config.Endpoint{
+		Name:   "backup",
+		Host:   "backup.example.com",
+		Port:   9443,
+		Path:   "/backup",
+		WSS:    true,
+		AESKey: testAESKey,
+	})
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("unexpected endpoint post response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodPatch, "/api/client/endpoints/edge", token, endpointPatchRequest{
+		Host:                  ptr("api.example.com"),
+		IP:                    ptr("198.51.100.20"),
+		Port:                  intPtr(8443),
+		Path:                  ptr("/edge"),
+		WSS:                   boolPtr(true),
+		SSLRejectUnauthorized: boolPtr(true),
 	})
 	if rr.Code != http.StatusOK {
-		t.Fatalf("unexpected endpoint put response: %d %s", rr.Code, rr.Body.String())
+		t.Fatalf("unexpected endpoint patch response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodPost, "/api/client/profiles", token, config.ClientProfile{
+		Name:         "stage",
+		Endpoint:     "backup",
+		ClientID:     "u2",
+		ClientSecret: "s2",
+	})
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("unexpected profile post response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodPatch, "/api/client/profiles/prod", token, clientProfilePatchRequest{
+		ClientID: ptr("rotated-id"),
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected profile patch response: %d %s", rr.Code, rr.Body.String())
 	}
 
 	rr = performJSON(t, router, http.MethodPost, "/api/client/prod/tunnels", token, config.Tunnel{
@@ -129,6 +157,23 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("client secret leaked: %s", rr.Body.String())
 	}
 
+	runtime.SetTunnelState("prod", "db", "edge", "127.0.0.1:3306", "listening", "")
+	runtime.IncTunnelConnections("prod", "db", "edge", "127.0.0.1:3306")
+	rr = performJSON(t, router, http.MethodGet, "/api/client/runtime", token, nil)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"state":"listening"`) || !strings.Contains(rr.Body.String(), `"active_connections":1`) {
+		t.Fatalf("unexpected client runtime response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodDelete, "/api/client/profiles/stage", token, nil)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("unexpected profile delete response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodDelete, "/api/client/endpoints/backup", token, nil)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("unexpected endpoint delete response: %d %s", rr.Code, rr.Body.String())
+	}
+
 	cfg, err := config.Load(p.Config())
 	if err != nil {
 		t.Fatal(err)
@@ -139,10 +184,13 @@ func TestClientEndpoints(t *testing.T) {
 	if len(cfg.Client.Clients[0].Tunnels) != 1 || cfg.Client.Clients[0].Tunnels[0].Name != "db" || cfg.Client.Clients[0].Tunnels[0].TargetPort != 3307 {
 		t.Fatalf("unexpected tunnels after api update: %+v", cfg.Client.Clients[0].Tunnels)
 	}
+	if cfg.Client.Clients[0].ClientID != "rotated-id" {
+		t.Fatalf("unexpected client profile after api update: %+v", cfg.Client.Clients[0])
+	}
 }
 
 func TestServerClientEndpointsAndStats(t *testing.T) {
-	router, p, token, _ := newTestRouter(t, true)
+	router, p, token, _, _ := newTestRouter(t, true)
 
 	rr := performJSON(t, router, http.MethodPost, "/api/server/clients", token, config.ClientIdentity{
 		ID:     "u2",
@@ -192,7 +240,7 @@ func TestServerClientEndpointsAndStats(t *testing.T) {
 }
 
 func TestLoopbackCanSkipAuth(t *testing.T) {
-	router, _, _, _ := newTestRouter(t, false)
+	router, _, _, _, _ := newTestRouter(t, false)
 
 	rr := performJSON(t, router, http.MethodGet, "/api/config/path", "", nil)
 	if rr.Code != http.StatusOK {
@@ -201,7 +249,7 @@ func TestLoopbackCanSkipAuth(t *testing.T) {
 }
 
 func TestEventStreamAndWebSocketEndpoints(t *testing.T) {
-	router, _, token, bus := newTestRouter(t, true)
+	router, _, token, bus, _ := newTestRouter(t, true)
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -262,7 +310,7 @@ func TestEventStreamAndWebSocketEndpoints(t *testing.T) {
 	}
 }
 
-func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, string, *events.Bus) {
+func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, string, *events.Bus, *services.Runtime) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -320,14 +368,15 @@ client:
 		t.Fatal(err)
 	}
 	bus := events.NewBus()
+	runtime := services.NewRuntime()
 
 	return NewRouter(Options{
 		Registry:    reg,
-		Runtime:     services.NewRuntime(),
+		Runtime:     runtime,
 		Auth:        services.NewAuthService(reg.HTTPToken),
 		Events:      bus,
 		RequireAuth: requireAuth,
-	}), p, testHTTPToken, bus
+	}), p, testHTTPToken, bus, runtime
 }
 
 func performJSON(t *testing.T, handler http.Handler, method, path, token string, body any) *httptest.ResponseRecorder {
@@ -359,3 +408,5 @@ func performJSON(t *testing.T, handler http.Handler, method, path, token string,
 func ptr(s string) *string { return &s }
 
 func intPtr(v int) *int { return &v }
+
+func boolPtr(v bool) *bool { return &v }

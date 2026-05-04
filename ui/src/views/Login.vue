@@ -32,30 +32,23 @@ async function submit() {
 <template>
   <div class="login-wrap">
     <div class="login-card">
-      <h1>Sign in</h1>
-      <p class="hint">
-        Paste the fixed management token from <code>config.yaml</code>.
-      </p>
+      <div class="page-kicker">ws2tcp</div>
+      <h1>Open the management console</h1>
+      <p class="hint">Use the fixed management token from <code>config.yaml</code>.</p>
       <div v-if="error" class="banner error">{{ error }}</div>
-      <fluent-text-field
+      <label class="field-label" for="token">Management token</label>
+      <input
+        id="token"
+        v-model="token"
+        class="text-input"
         type="password"
-        :value="token"
-        placeholder="Management token"
-        @input="(e: Event) => (token = (e.target as HTMLInputElement).value)"
+        placeholder="Paste token"
         @keydown.enter="submit"
-      >
-        Management token
-      </fluent-text-field>
-      <div style="height: 0.75rem" />
-      <fluent-button appearance="accent" :disabled="busy || !token" @click="submit">
+      />
+      <button class="button button-primary" type="button" :disabled="busy || !token" @click="submit">
         {{ busy ? 'Verifying…' : 'Sign in' }}
-      </fluent-button>
-      <p
-        v-if="ver.info"
-        style="margin: 1rem 0 0; font-size: 0.7rem; color: var(--text-muted); text-align: center"
-      >
-        ws2tcp {{ ver.info.version }} · {{ ver.info.commit }}
-      </p>
+      </button>
+      <p v-if="ver.info" class="login-version">ws2tcp {{ ver.info.version }} · {{ ver.info.commit }}</p>
     </div>
   </div>
 </template>

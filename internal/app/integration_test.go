@@ -131,7 +131,7 @@ func roundTrip(t *testing.T, encrypted bool) {
 	localLn.Close()
 	tn.Listen = localAddr
 
-	tunnel := client.NewTunnel(tn, ep, services.ClientCredentials{ClientID: "u1", ClientSecret: "s1"}, rt, bus, logger)
+	tunnel := client.NewTunnel("prod", tn, ep, services.ClientCredentials{ClientID: "u1", ClientSecret: "s1"}, rt, bus, logger)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

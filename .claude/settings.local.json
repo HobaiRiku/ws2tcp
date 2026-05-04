@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build *)",
+      "Bash(xargs sed *)",
+      "Bash(go test *)",
+      "Bash(make build *)",
+      "Bash(./build/bin/ws2tcp version *)",
+      "Bash(./build/bin/ws2tcp -v)"
+    ]
+  }
+}

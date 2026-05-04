@@ -1,6 +1,7 @@
 package services
 
 import (
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,11 +18,27 @@ type Runtime struct {
 
 	mu        sync.RWMutex
 	perClient map[string]int32 // identity ID -> live connections
+	perTunnel map[string]TunnelStatus
+}
+
+type TunnelStatus struct {
+	Key               string    `json:"key"`
+	Client            string    `json:"client"`
+	Tunnel            string    `json:"tunnel"`
+	Endpoint          string    `json:"endpoint"`
+	Listen            string    `json:"listen"`
+	State             string    `json:"state"`
+	Error             string    `json:"error,omitempty"`
+	ActiveConnections int32     `json:"active_connections"`
+	UpdatedAt         time.Time `json:"updated_at"`
 }
 
 // NewRuntime constructs an empty Runtime.
 func NewRuntime() *Runtime {
-	return &Runtime{perClient: map[string]int32{}}
+	return &Runtime{
+		perClient: map[string]int32{},
+		perTunnel: map[string]TunnelStatus{},
+	}
 }
 
 // AddBytesIn / AddBytesOut accumulate transfer counters.
@@ -56,6 +73,71 @@ func (rt *Runtime) ClientConnections() map[string]int32 {
 	for k, v := range rt.perClient {
 		out[k] = v
 	}
+	return out
+}
+
+func (rt *Runtime) SetTunnelState(client, tunnel, endpoint, listen, state, errText string) {
+	key := clientTunnelKey(client, tunnel)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	current := rt.perTunnel[key]
+	current.Key = key
+	current.Client = client
+	current.Tunnel = tunnel
+	current.Endpoint = endpoint
+	current.Listen = listen
+	current.State = state
+	current.Error = errText
+	current.UpdatedAt = time.Now().UTC()
+	rt.perTunnel[key] = current
+}
+
+func (rt *Runtime) IncTunnelConnections(client, tunnel, endpoint, listen string) {
+	key := clientTunnelKey(client, tunnel)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	current := rt.perTunnel[key]
+	current.Key = key
+	current.Client = client
+	current.Tunnel = tunnel
+	current.Endpoint = endpoint
+	current.Listen = listen
+	current.ActiveConnections++
+	if current.State == "" {
+		current.State = "listening"
+	}
+	current.UpdatedAt = time.Now().UTC()
+	rt.perTunnel[key] = current
+}
+
+func (rt *Runtime) DecTunnelConnections(client, tunnel string) {
+	key := clientTunnelKey(client, tunnel)
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	current, ok := rt.perTunnel[key]
+	if !ok {
+		return
+	}
+	if current.ActiveConnections > 0 {
+		current.ActiveConnections--
+	}
+	current.UpdatedAt = time.Now().UTC()
+	rt.perTunnel[key] = current
+}
+
+func (rt *Runtime) TunnelStatuses() []TunnelStatus {
+	rt.mu.RLock()
+	defer rt.mu.RUnlock()
+	out := make([]TunnelStatus, 0, len(rt.perTunnel))
+	for _, status := range rt.perTunnel {
+		out = append(out, status)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Client == out[j].Client {
+			return out[i].Tunnel < out[j].Tunnel
+		}
+		return out[i].Client < out[j].Client
+	})
 	return out
 }
 

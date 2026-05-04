@@ -2,8 +2,8 @@
 
 Stack: **Vue 3** (Composition API + `<script setup>`) + **Vite** +
 **Microsoft Fluent UI Web Components** (`@fluentui/web-components`).
-Built artifact in `web/dist/` is embedded into the binary via
-`//go:embed all:web/dist`.
+Built artifact in `ui/dist/` is embedded into the binary via the build
+pipeline and copied into `internal/web/static/`.
 
 ## Why Fluent Web Components with Vue 3
 
@@ -51,7 +51,7 @@ Kept intentionally small. Six views map 1:1 to API resources:
 ## Frontend ↔ backend contract
 
 - The OpenAPI for the API is generated from Go structs (`swaggo` or a
-  small in-tree generator) and committed at `web/openapi.json`. The
+  small in-tree generator) and committed at `ui/openapi.json`. The
   frontend uses it for typed clients via `openapi-typescript`. Keeping
   the schema generated avoids hand-maintaining DTOs.
 - Live updates have two transports under `/api/events` (see
@@ -67,7 +67,7 @@ Kept intentionally small. Six views map 1:1 to API resources:
 
 ```make
 web:
-	cd web && pnpm install && pnpm build
+	cd ui && pnpm install && pnpm build
 
 build: web
 	go build -tags release -ldflags "$(LDFLAGS)" -o dist/ws2tcp ./
@@ -75,7 +75,7 @@ build: web
 dev:
 	# foreground daemon + vite dev with API proxy
 	WS2TCP_HOME=$(PWD)/.dev go run . run &
-	cd web && pnpm dev
+	cd ui && pnpm dev
 ```
 
 In dev mode the SPA is served by Vite at `:5173` and proxies `/api/*`

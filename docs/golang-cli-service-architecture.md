@@ -139,9 +139,7 @@ github.com/go-chi/chi/v5
 
 方式：
 
-```go
-//go:embed all:web/dist
-```
+构建产物由 `ui/` 生成后复制到 `internal/web/static/` 再嵌入二进制。
 
 能力：
 
@@ -323,7 +321,7 @@ myapp/
 │   ├── storage/
 │   └── log/
 │
-└── web/
+└── ui/
     ├── src/
     └── dist/
 ```
@@ -499,4 +497,3 @@ built: 2026-05-03T00:00:00Z
 
 ```
 ```
-

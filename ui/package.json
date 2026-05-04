@@ -1,5 +1,5 @@
 {
-  "name": "ws2tcp-web",
+  "name": "ws2tcp-ui",
   "private": true,
   "version": "0.0.0",
   "type": "module",

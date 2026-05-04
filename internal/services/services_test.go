@@ -291,6 +291,53 @@ func TestSetClientEndpointRollsBackOnInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestEndpointCRUDPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	if err := r.CreateEndpoint(config.Endpoint{
+		Name:   "backup",
+		Host:   "backup.example.com",
+		Port:   9443,
+		Path:   "/connect",
+		WSS:    true,
+		AESKey: k32,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.FindEndpoint("backup"); err != nil {
+		t.Fatalf("created endpoint missing from live registry: %v", err)
+	}
+
+	host := "backup-v2.example.com"
+	port := 9555
+	if err := r.UpdateEndpoint("backup", EndpointPatch{Host: &host, Port: &port}); err != nil {
+		t.Fatal(err)
+	}
+
+	endpoint, err := r.FindEndpoint("backup")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if endpoint.Host != host || endpoint.Port != port {
+		t.Fatalf("updated endpoint not applied: %+v", endpoint)
+	}
+
+	if err := r.DeleteEndpoint("backup"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.FindEndpoint("backup"); err == nil {
+		t.Fatal("deleted endpoint still present in live registry")
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "name: backup") {
+		t.Fatal("deleted endpoint still present in config")
+	}
+}
+
 func TestCreateClientPersistsAndApplies(t *testing.T) {
 	r, p := newStoredRegistry(t)
 
@@ -511,6 +558,69 @@ func TestSetClientCredentialsPersistsAndApplies(t *testing.T) {
 	text := string(raw)
 	if !strings.Contains(text, "client_id: rotated-id") || !strings.Contains(text, "client_secret: rotated-secret") {
 		t.Fatal("updated client auth not written to config")
+	}
+}
+
+func TestClientProfileCRUDPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	if err := r.CreateEndpoint(config.Endpoint{
+		Name:   "backup",
+		Host:   "backup.example.com",
+		Port:   9443,
+		Path:   "/connect",
+		WSS:    true,
+		AESKey: k32,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.CreateClientProfile(config.ClientProfile{
+		Name:         "edge",
+		Endpoint:     "backup",
+		ClientID:     "edge-id",
+		ClientSecret: "edge-secret",
+		Tunnels: []config.Tunnel{
+			{Name: "ssh", Listen: "127.0.0.1:2222", TargetHost: "10.0.0.10", TargetPort: 22},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	profile, err := r.FindClientProfile("edge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.Endpoint != "backup" || len(profile.Tunnels) != 1 {
+		t.Fatalf("created profile not applied: %+v", profile)
+	}
+
+	clientID := "edge-rotated"
+	if err := r.UpdateClientProfile("edge", ClientProfilePatch{ClientID: &clientID}); err != nil {
+		t.Fatal(err)
+	}
+	profile, err = r.FindClientProfile("edge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if profile.ClientID != clientID {
+		t.Fatalf("updated client profile not applied: %+v", profile)
+	}
+
+	if err := r.DeleteClientProfile("edge"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.FindClientProfile("edge"); err == nil {
+		t.Fatal("deleted client profile still present in live registry")
+	}
+
+	cfg, err := config.Load(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, client := range cfg.Client.Clients {
+		if client.Name == "edge" {
+			t.Fatal("deleted client profile still present in config")
+		}
 	}
 }
 

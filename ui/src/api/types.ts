@@ -20,6 +20,7 @@ export type ACLRule = {
 export type ServerClient = {
   id: string
   acl: ACLRule[]
+  secret?: string
 }
 
 export type ServerStats = {
@@ -36,6 +37,7 @@ export type Endpoint = {
   port: number
   path: string
   wss: boolean
+  aes_key?: string
   ssl_reject_unauthorized?: boolean
 }
 
@@ -50,7 +52,30 @@ export type ClientProfile = {
   name: string
   client_id: string
   endpoint: string
+  client_secret?: string
   tunnels: Tunnel[]
+}
+
+export type TunnelRuntimeStatus = {
+  key: string
+  client: string
+  tunnel: string
+  endpoint: string
+  listen: string
+  state: string
+  error?: string
+  active_connections: number
+  updated_at: string
+}
+
+export type ClientRuntimeResponse = {
+  tunnels: TunnelRuntimeStatus[]
+}
+
+export type EventMessage = {
+  topic: string
+  time: string
+  data?: Record<string, unknown>
 }
 
 export type ConfigDocument = Record<string, unknown>

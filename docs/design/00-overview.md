@@ -65,7 +65,7 @@ Carried from the starter, with YAML, gin, and WebSocket adjustments:
 | Cross-platform paths | `github.com/adrg/xdg`           | only as fallback if `WS2TCP_HOME` unset |
 | WebSocket (data plane) | `github.com/coder/websocket`  | `NetConn` wraps WS as `net.Conn` so we can `io.Copy` it against the TCP side |
 | WebSocket (mgmt plane) | `github.com/coder/websocket`  | reused for the future Web UI live-status / log-streaming endpoint mounted on gin |
-| Static embed         | `embed` (stdlib)                | `web/dist` |
+| Static embed         | `embed` (stdlib)                | `ui/dist` |
 | Logging              | `log/slog` (stdlib)             | JSON to `data/logs/`, text to stderr in `run` |
 | Local DB             | *not used in v1*                | config files alone are enough; revisit if metrics/audit grow |
 | YAML (lower-level)   | `gopkg.in/yaml.v3`              | only for surgical writes from CLI/API; viper handles reads |
@@ -134,7 +134,7 @@ ws2tcp/
 │   │
 │   └── web/                      # embed + SPA fallback handler
 │
-└── web/
+└── ui/
     ├── package.json              # vite + vue3 + @fluentui/web-components
     ├── src/
     └── dist/                     # built artifact, embedded

@@ -16,8 +16,8 @@ PNPM          := pnpm
 APP           := ws2tcp
 PKG           := ./...
 BIN_DIR       := dist
-WEB_DIR       := web
-WEB_DIST      := $(WEB_DIR)/dist
+UI_DIR        := ui
+UI_DIST       := $(UI_DIR)/dist
 
 VERSION       ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT        := $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
@@ -49,17 +49,17 @@ lint:                            ## staticcheck + revive via golangci-lint
 	$(GOLANGCI_LINT) run
 
 # ─── frontend ─────────────────────────────────────────────────────────
-.PHONY: web-install
-web-install:
-	cd $(WEB_DIR) && $(PNPM) install --frozen-lockfile
+.PHONY: ui-install
+ui-install:
+	cd $(UI_DIR) && $(PNPM) install --frozen-lockfile
 
-.PHONY: web
-web: web-install                 ## build embedded SPA
-	cd $(WEB_DIR) && $(PNPM) build
+.PHONY: ui
+ui: ui-install                   ## build embedded SPA
+	cd $(UI_DIR) && $(PNPM) build
 
-.PHONY: web-dev
-web-dev: web-install             ## vite dev server with API proxy
-	cd $(WEB_DIR) && $(PNPM) dev
+.PHONY: ui-dev
+ui-dev: ui-install               ## vite dev server with API proxy
+	cd $(UI_DIR) && $(PNPM) dev
 
 # ─── backend build ────────────────────────────────────────────────────
 .PHONY: build
@@ -79,7 +79,7 @@ run: build-nogui                 ## foreground daemon w/ ./.dev as WS2TCP_HOME
 
 .PHONY: dev
 dev:                             ## backend + vite together (two terminals recommended)
-	@echo "Run 'make run' in one shell and 'make web-dev' in another."
+	@echo "Run 'make run' in one shell and 'make ui-dev' in another."
 
 # ─── tests ────────────────────────────────────────────────────────────
 .PHONY: test

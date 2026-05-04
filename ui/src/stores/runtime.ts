@@ -1,0 +1,193 @@
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
+import { api, tokenStore } from '@/api/client'
+import type {
+  ClientRuntimeResponse,
+  EventMessage,
+  ServerStats,
+  TunnelRuntimeStatus
+} from '@/api/types'
+
+const MAX_EVENTS = 30
+
+function tunnelKey(client: string, tunnel: string) {
+  return `${client}\u0000${tunnel}`
+}
+
+function readObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+}
+
+function readString(value: unknown, key: string) {
+  const field = readObject(value)[key]
+  return typeof field === 'string' ? field : ''
+}
+
+export const useRuntimeStore = defineStore('runtime', () => {
+  const serverStats = ref<ServerStats | null>(null)
+  const tunnelStatusMap = ref<Record<string, TunnelRuntimeStatus>>({})
+  const recentEvents = ref<EventMessage[]>([])
+  const connected = ref(false)
+
+  let socket: WebSocket | null = null
+  let reconnectTimer: number | null = null
+  let closedManually = false
+
+  const tunnels = computed(() =>
+    Object.values(tunnelStatusMap.value).sort((a, b) =>
+      a.client === b.client ? a.tunnel.localeCompare(b.tunnel) : a.client.localeCompare(b.client)
+    )
+  )
+
+  const activeServerConnections = computed(() =>
+    Object.values(serverStats.value?.client_connections ?? {}).reduce((sum, count) => sum + count, 0)
+  )
+
+  function setTunnelStatus(status: TunnelRuntimeStatus) {
+    tunnelStatusMap.value = {
+      ...tunnelStatusMap.value,
+      [status.key]: status
+    }
+  }
+
+  async function refresh() {
+    const [statsErr, stats] = await api.get<ServerStats>('/api/server/stats')
+    if (!statsErr && stats) {
+      serverStats.value = stats
+    }
+
+    const [runtimeErr, runtime] = await api.get<ClientRuntimeResponse>('/api/client/runtime')
+    if (!runtimeErr && runtime) {
+      const next: Record<string, TunnelRuntimeStatus> = {}
+      for (const item of runtime.tunnels ?? []) {
+        next[item.key] = item
+      }
+      tunnelStatusMap.value = next
+    }
+  }
+
+  function pushEvent(event: EventMessage) {
+    recentEvents.value = [event, ...recentEvents.value].slice(0, MAX_EVENTS)
+  }
+
+  function applyServerConnectionDelta(clientID: string, delta: number) {
+    if (!clientID) return
+    const current = serverStats.value
+    if (!current) return
+    const next = { ...(current.client_connections ?? {}) }
+    next[clientID] = Math.max(0, (next[clientID] ?? 0) + delta)
+    serverStats.value = { ...current, client_connections: next }
+  }
+
+  function handleEvent(raw: string) {
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch {
+      return
+    }
+    const payload = readObject(parsed)
+    const event: EventMessage = {
+      topic: readString(payload, 'topic'),
+      time: readString(payload, 'time'),
+      data: readObject(payload.data)
+    }
+    if (!event.topic) return
+
+    pushEvent(event)
+
+    if (event.topic === 'tunnel.state') {
+      const client = readString(event.data, 'client')
+      const tunnel = readString(event.data, 'tunnel')
+      if (!client || !tunnel) return
+      const key = tunnelKey(client, tunnel)
+      const previous = tunnelStatusMap.value[key]
+      setTunnelStatus({
+        key,
+        client,
+        tunnel,
+        endpoint: readString(event.data, 'endpoint') || previous?.endpoint || '',
+        listen: readString(event.data, 'listen') || previous?.listen || '',
+        state: readString(event.data, 'state') || previous?.state || 'unknown',
+        error: readString(event.data, 'error') || '',
+        active_connections: previous?.active_connections ?? 0,
+        updated_at: event.time || new Date().toISOString()
+      })
+      return
+    }
+
+    if (event.topic === 'server.conn.opened') {
+      applyServerConnectionDelta(readString(event.data, 'client_id'), 1)
+      return
+    }
+
+    if (event.topic === 'server.conn.closed') {
+      applyServerConnectionDelta(readString(event.data, 'client_id'), -1)
+    }
+  }
+
+  function clearReconnectTimer() {
+    if (reconnectTimer !== null) {
+      window.clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+  }
+
+  function connect() {
+    if (socket || !tokenStore.get()) return
+    closedManually = false
+    clearReconnectTimer()
+
+    const scheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const url = new URL('/api/events/ws', `${scheme}//${window.location.host}`)
+    url.searchParams.set('token', tokenStore.get())
+
+    socket = new WebSocket(url)
+    socket.onopen = () => {
+      connected.value = true
+    }
+    socket.onmessage = event => {
+      if (typeof event.data === 'string') {
+        handleEvent(event.data)
+      }
+    }
+    socket.onclose = () => {
+      connected.value = false
+      socket = null
+      if (closedManually || !tokenStore.get()) return
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = null
+        connect()
+      }, 2000)
+    }
+    socket.onerror = () => {
+      connected.value = false
+    }
+  }
+
+  function disconnect() {
+    closedManually = true
+    clearReconnectTimer()
+    connected.value = false
+    if (socket) {
+      socket.close()
+      socket = null
+    }
+  }
+
+  function tunnelStatus(client: string, tunnel: string) {
+    return tunnelStatusMap.value[tunnelKey(client, tunnel)] ?? null
+  }
+
+  return {
+    serverStats,
+    tunnels,
+    recentEvents,
+    connected,
+    activeServerConnections,
+    refresh,
+    connect,
+    disconnect,
+    tunnelStatus
+  }
+})
