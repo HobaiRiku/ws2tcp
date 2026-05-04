@@ -78,11 +78,8 @@ export async function request<T = unknown>(
   if (!resp.ok) {
     const err: ApiError = {
       status: resp.status,
-      code: (parsed && (parsed as { code?: string }).code) || `HTTP_${resp.status}`,
-      message:
-        (parsed && (parsed as { message?: string }).message) ||
-        resp.statusText ||
-        'request failed'
+      code: readStringField(parsed, 'code') || `HTTP_${resp.status}`,
+      message: readStringField(parsed, 'message') || resp.statusText || 'request failed'
     }
     return [err, null] as const
   }
@@ -96,6 +93,14 @@ function safeParseJSON(text: string): unknown {
   } catch {
     return text
   }
+}
+
+function readStringField(value: unknown, key: 'code' | 'message'): string {
+  if (!value || typeof value !== 'object') {
+    return ''
+  }
+  const field = (value as Record<string, unknown>)[key]
+  return typeof field === 'string' ? field : ''
 }
 
 export const api = {
