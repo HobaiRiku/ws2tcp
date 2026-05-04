@@ -206,6 +206,69 @@ func TestClientEndpoint(t *testing.T) {
 	}
 }
 
+func TestSetClientEndpointPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	err := r.SetClientEndpoint(config.Endpoint{
+		Host:                  "next.example.com",
+		IP:                    "203.0.113.20",
+		Port:                  8443,
+		Path:                  "/connect-v2",
+		WSS:                   true,
+		AESKey:                k32,
+		SSLRejectUnauthorized: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ep := r.ClientEndpoint()
+	if ep.Host != "next.example.com" || ep.Port != 8443 || !ep.WSS {
+		t.Fatalf("updated endpoint not applied: %+v", ep)
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "host: next.example.com") {
+		t.Fatal("endpoint host not written to config")
+	}
+	if !strings.Contains(text, "ssl_reject_unauthorized: true") {
+		t.Fatal("endpoint tls flag not written to config")
+	}
+}
+
+func TestSetClientEndpointRollsBackOnInvalidConfig(t *testing.T) {
+	r, p := newStoredRegistry(t)
+	before, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = r.SetClientEndpoint(config.Endpoint{
+		Host:   "",
+		Port:   3005,
+		Path:   "/connect",
+		AESKey: k32,
+	})
+	if err == nil {
+		t.Fatal("expected invalid endpoint error")
+	}
+
+	after, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("config file was not rolled back after invalid endpoint update")
+	}
+	if r.ClientEndpoint().Host != "x" {
+		t.Fatal("live registry changed after failed endpoint update")
+	}
+}
+
 func TestCreateClientPersistsAndApplies(t *testing.T) {
 	r, p := newStoredRegistry(t)
 
@@ -313,5 +376,88 @@ func TestSetClientACLRollsBackOnInvalidConfig(t *testing.T) {
 	}
 	if _, ok := r.Verify("u1", "s1"); !ok {
 		t.Fatal("live registry changed after failed update")
+	}
+}
+
+func TestCreateTunnelPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	err := r.CreateTunnel(config.Tunnel{
+		Name:       "db",
+		Listen:     "127.0.0.1:3306",
+		TargetHost: "10.0.0.10",
+		TargetPort: 3306,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := r.FindTunnel("db"); err != nil {
+		t.Fatalf("new tunnel not applied to live registry: %v", err)
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "name: db") {
+		t.Fatal("new tunnel not written to config")
+	}
+}
+
+func TestUpdateTunnelPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	listen := "127.0.0.1:2222"
+	targetHost := "ssh.internal"
+	targetPort := 2222
+	err := r.UpdateTunnel("t1", TunnelPatch{
+		Listen:     &listen,
+		TargetHost: &targetHost,
+		TargetPort: &targetPort,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tunnel, err := r.FindTunnel("t1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tunnel.Listen != listen || tunnel.TargetHost != targetHost || tunnel.TargetPort != targetPort {
+		t.Fatalf("updated tunnel not applied: %+v", tunnel)
+	}
+
+	raw, err := os.ReadFile(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	if !strings.Contains(text, "listen: 127.0.0.1:2222") {
+		t.Fatal("updated tunnel listen not written to config")
+	}
+	if !strings.Contains(text, "target_host: ssh.internal") {
+		t.Fatal("updated tunnel target host not written to config")
+	}
+}
+
+func TestDeleteTunnelPersistsAndApplies(t *testing.T) {
+	r, p := newStoredRegistry(t)
+
+	if err := r.DeleteTunnel("t1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.FindTunnel("t1"); err == nil {
+		t.Fatal("deleted tunnel still present in live registry")
+	}
+
+	cfg, err := config.Load(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tunnel := range cfg.Client.Tunnels {
+		if tunnel.Name == "t1" {
+			t.Fatal("deleted tunnel still present in client.tunnels")
+		}
 	}
 }
