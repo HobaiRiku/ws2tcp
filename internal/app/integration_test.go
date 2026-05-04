@@ -18,6 +18,7 @@ import (
 	"websocket2Tcp/internal/core/client"
 	"websocket2Tcp/internal/core/server"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 const k32 = "njpjvjkgfykgpqpcksvjydvlctgznlnz"
@@ -91,7 +92,11 @@ func roundTrip(t *testing.T, encrypted bool) {
 		t.Fatal(err)
 	}
 	rt := services.NewRuntime()
-	handler := server.NewHandler(srvCfg, reg, rt, logger)
+	bus := events.NewBus()
+	eventsCtx, stopEvents := context.WithCancel(context.Background())
+	defer stopEvents()
+	sub := bus.Subscribe(eventsCtx)
+	handler := server.NewHandler(srvCfg, reg, rt, bus, logger)
 	defer handler.Close()
 
 	// 3. HTTP test server hosting the upgrade handler.
@@ -126,7 +131,7 @@ func roundTrip(t *testing.T, encrypted bool) {
 	localLn.Close()
 	tn.Listen = localAddr
 
-	tunnel := client.NewTunnel(tn, ep, services.ClientCredentials{ClientID: "u1", ClientSecret: "s1"}, rt, logger)
+	tunnel := client.NewTunnel(tn, ep, services.ClientCredentials{ClientID: "u1", ClientSecret: "s1"}, rt, bus, logger)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -165,6 +170,28 @@ func roundTrip(t *testing.T, encrypted bool) {
 	cancel()
 	c.Close()
 	wg.Wait()
+	stopEvents()
+	var topics []string
+	for {
+		select {
+		case msg, ok := <-sub:
+			if !ok {
+				sub = nil
+				continue
+			}
+			topics = append(topics, msg.Topic)
+		case <-time.After(100 * time.Millisecond):
+			goto drained
+		}
+	}
+
+drained:
+	if !contains(topics, "tunnel.state") {
+		t.Fatalf("expected tunnel.state event, got %v", topics)
+	}
+	if !contains(topics, "server.conn.opened") {
+		t.Fatalf("expected server.conn.opened event, got %v", topics)
+	}
 }
 
 func waitListening(addr string, max time.Duration) error {
@@ -181,3 +208,12 @@ func waitListening(addr string, max time.Duration) error {
 
 // Force the http import to stay even when we use httptest only.
 var _ = http.NewServeMux
+
+func contains(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
+			return true
+		}
+	}
+	return false
+}

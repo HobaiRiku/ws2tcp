@@ -11,8 +11,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	eventws "websocket2Tcp/internal/api/ws"
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 // Options carries the dependencies needed to build the management router.
@@ -21,6 +23,7 @@ type Options struct {
 	Registry    *services.Registry
 	Runtime     *services.Runtime
 	Auth        *services.AuthService
+	Events      *events.Bus
 	RequireAuth bool
 	Logger      *slog.Logger
 }
@@ -288,6 +291,9 @@ func NewRouter(opts Options) *gin.Engine {
 			ClientConnections: opts.Runtime.ClientConnections(),
 		})
 	})
+
+	api.GET("/events/stream", readOnly, eventws.StreamHandler(opts.Events))
+	api.GET("/events/ws", readOnly, eventws.WebSocketHandler(opts.Events))
 
 	api.GET("/auth/tokens", adminOnly, func(c *gin.Context) {
 		tokens, err := opts.Auth.ListTokens()

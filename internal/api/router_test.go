@@ -1,7 +1,9 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,18 +11,21 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 const testAESKey = "njpjvjkgfykgpqpcksvjydvlctgznlnz"
 
 func TestHealthVersionAndConfigEndpoints(t *testing.T) {
-	router, p, auth := newTestRouter(t, true)
+	router, p, auth, _ := newTestRouter(t, true)
 	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
 
 	rr := performJSON(t, router, http.MethodGet, "/api/health", "", nil)
@@ -55,7 +60,7 @@ func TestHealthVersionAndConfigEndpoints(t *testing.T) {
 }
 
 func TestAuthScopesAndTokenEndpoints(t *testing.T) {
-	router, _, auth := newTestRouter(t, true)
+	router, _, auth, _ := newTestRouter(t, true)
 	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
 	adminToken := issueToken(t, auth, "admin", []string{services.TokenScopeAdmin})
 
@@ -87,7 +92,7 @@ func TestAuthScopesAndTokenEndpoints(t *testing.T) {
 }
 
 func TestClientEndpoints(t *testing.T) {
-	router, p, auth := newTestRouter(t, true)
+	router, p, auth, _ := newTestRouter(t, true)
 	clientToken := issueToken(t, auth, "client-writer", []string{services.TokenScopeClientWrite})
 
 	rr := performJSON(t, router, http.MethodGet, "/api/client/endpoints", clientToken, nil)
@@ -156,7 +161,7 @@ func TestClientEndpoints(t *testing.T) {
 }
 
 func TestServerClientEndpointsAndStats(t *testing.T) {
-	router, p, auth := newTestRouter(t, true)
+	router, p, auth, _ := newTestRouter(t, true)
 	serverToken := issueToken(t, auth, "server-writer", []string{services.TokenScopeServerWrite})
 	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
 
@@ -208,7 +213,7 @@ func TestServerClientEndpointsAndStats(t *testing.T) {
 }
 
 func TestLoopbackCanSkipAuth(t *testing.T) {
-	router, _, _ := newTestRouter(t, false)
+	router, _, _, _ := newTestRouter(t, false)
 
 	rr := performJSON(t, router, http.MethodGet, "/api/config/path", "", nil)
 	if rr.Code != http.StatusOK {
@@ -216,7 +221,70 @@ func TestLoopbackCanSkipAuth(t *testing.T) {
 	}
 }
 
-func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, *services.AuthService) {
+func TestEventStreamAndWebSocketEndpoints(t *testing.T) {
+	router, _, auth, bus := newTestRouter(t, true)
+	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/api/events/stream?topic=tunnel.state", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+readToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	done := make(chan string, 1)
+	go func() {
+		reader := bufio.NewReader(resp.Body)
+		var body strings.Builder
+		for i := 0; i < 8; i++ {
+			line, _ := reader.ReadString('\n')
+			body.WriteString(line)
+			text := body.String()
+			if strings.Contains(text, "event: tunnel.state") && strings.Contains(text, `"state":"listening"`) {
+				break
+			}
+		}
+		done <- body.String()
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	bus.Emit("tunnel.state", map[string]any{"state": "listening"})
+
+	select {
+	case body := <-done:
+		if !strings.Contains(body, "event: tunnel.state") || !strings.Contains(body, `"state":"listening"`) {
+			t.Fatalf("unexpected sse body: %s", body)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for sse event")
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + "/api/events/ws?token=" + readToken + "&topic=server.conn.opened"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	bus.Emit("server.conn.opened", map[string]any{"client_id": "u1"})
+	_, raw, err := conn.Read(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"topic":"server.conn.opened"`) || !strings.Contains(string(raw), `"client_id":"u1"`) {
+		t.Fatalf("unexpected ws payload: %s", string(raw))
+	}
+}
+
+func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, *services.AuthService, *events.Bus) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -273,13 +341,15 @@ client:
 		t.Fatal(err)
 	}
 	auth := services.NewAuthService(p.Tokens(), p.FileMode())
+	bus := events.NewBus()
 
 	return NewRouter(Options{
 		Registry:    reg,
 		Runtime:     services.NewRuntime(),
 		Auth:        auth,
+		Events:      bus,
 		RequireAuth: requireAuth,
-	}), p, auth
+	}), p, auth, bus
 }
 
 func performJSON(t *testing.T, handler http.Handler, method, path, token string, body any) *httptest.ResponseRecorder {

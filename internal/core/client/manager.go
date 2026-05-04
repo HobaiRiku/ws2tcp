@@ -8,6 +8,7 @@ import (
 
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 // Manager supervises N tunnels in one process. It owns one cancellable
@@ -24,6 +25,7 @@ import (
 type Manager struct {
 	registry *services.Registry
 	runtime  *services.Runtime
+	events   *events.Bus
 	log      *slog.Logger
 
 	mu      sync.Mutex
@@ -42,10 +44,11 @@ type runningTunnel struct {
 }
 
 // NewManager constructs the manager but does not start anything; call Run.
-func NewManager(reg *services.Registry, rt *services.Runtime, log *slog.Logger) *Manager {
+func NewManager(reg *services.Registry, rt *services.Runtime, bus *events.Bus, log *slog.Logger) *Manager {
 	return &Manager{
 		registry: reg,
 		runtime:  rt,
+		events:   bus,
 		log:      log.With("component", "client.manager"),
 		running:  map[string]*runningTunnel{},
 	}
@@ -112,12 +115,29 @@ func (m *Manager) startLocked(binding services.ClientTunnelBinding) {
 	}
 	m.running[binding.Key] = rt
 
-	tunnel := NewTunnel(binding.Tunnel, binding.Endpoint, binding.Credentials, m.runtime, m.log.With("client", binding.ClientName))
+	m.events.Emit("tunnel.state", map[string]any{
+		"client": binding.ClientName,
+		"tunnel": binding.Tunnel.Name,
+		"state":  "starting",
+	})
+	tunnel := NewTunnel(binding.Tunnel, binding.Endpoint, binding.Credentials, m.runtime, m.events, m.log.With("client", binding.ClientName))
 	go func() {
 		defer close(rt.done)
 		if err := tunnel.Run(tCtx); err != nil {
+			m.events.Emit("tunnel.state", map[string]any{
+				"client": binding.ClientName,
+				"tunnel": binding.Tunnel.Name,
+				"state":  "error",
+				"error":  err.Error(),
+			})
 			m.log.Error("tunnel exited with error", "client", binding.ClientName, "tunnel", binding.Tunnel.Name, "err", err)
+			return
 		}
+		m.events.Emit("tunnel.state", map[string]any{
+			"client": binding.ClientName,
+			"tunnel": binding.Tunnel.Name,
+			"state":  "stopped",
+		})
 	}()
 }
 

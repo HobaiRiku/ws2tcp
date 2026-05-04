@@ -40,6 +40,7 @@ import (
 	"websocket2Tcp/internal/core/frame"
 	"websocket2Tcp/internal/core/wsproxy"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 const (
@@ -55,14 +56,15 @@ type Tunnel struct {
 	ep      config.Endpoint
 	auth    services.ClientCredentials
 	runtime *services.Runtime
+	events  *events.Bus
 	log     *slog.Logger
 }
 
 // NewTunnel binds a tunnel to its resolved endpoint snapshot. The endpoint
 // is captured by value so a later edit (handled at the manager level via
 // Apply) won't half-update an in-flight tunnel.
-func NewTunnel(t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials, rt *services.Runtime, log *slog.Logger) *Tunnel {
-	return &Tunnel{cfg: t, ep: ep, auth: auth, runtime: rt, log: log.With("tunnel", t.Name)}
+func NewTunnel(t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials, rt *services.Runtime, bus *events.Bus, log *slog.Logger) *Tunnel {
+	return &Tunnel{cfg: t, ep: ep, auth: auth, runtime: rt, events: bus, log: log.With("tunnel", t.Name)}
 }
 
 // Run starts the local TCP listener and serves accepts until ctx is done.
@@ -74,6 +76,12 @@ func (t *Tunnel) Run(ctx context.Context) error {
 		return fmt.Errorf("listen %s: %w", t.cfg.Listen, err)
 	}
 	t.log.Info("tunnel listening", "listen", t.cfg.Listen, "endpoint_host", t.ep.Host)
+	t.events.Emit("tunnel.state", map[string]any{
+		"tunnel":   t.cfg.Name,
+		"listen":   t.cfg.Listen,
+		"endpoint": t.ep.Name,
+		"state":    "listening",
+	})
 
 	go func() {
 		<-ctx.Done()

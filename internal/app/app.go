@@ -20,6 +20,7 @@ import (
 	"websocket2Tcp/internal/core/server"
 	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 // Options bundles the inputs Run needs. Built by cmd/ from CLI flags.
@@ -48,6 +49,7 @@ func Run(ctx context.Context, opts Options) error {
 		return fmt.Errorf("services.New: %w", err)
 	}
 	runtime := services.NewRuntime()
+	eventBus := events.NewBus()
 
 	var wg sync.WaitGroup
 	errs := make(chan error, 4)
@@ -56,7 +58,7 @@ func Run(ctx context.Context, opts Options) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := runAPI(ctx, opts, registry, runtime); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := runAPI(ctx, opts, registry, runtime, eventBus); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errs <- fmt.Errorf("api: %w", err)
 			}
 		}()
@@ -66,7 +68,7 @@ func Run(ctx context.Context, opts Options) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := runServer(ctx, opts, registry, runtime); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := runServer(ctx, opts, registry, runtime, eventBus); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errs <- fmt.Errorf("server: %w", err)
 			}
 		}()
@@ -76,7 +78,7 @@ func Run(ctx context.Context, opts Options) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			mgr := client.NewManager(registry, runtime, opts.Logger)
+			mgr := client.NewManager(registry, runtime, eventBus, opts.Logger)
 			mgr.Run(ctx)
 		}()
 	}
@@ -98,7 +100,7 @@ func Run(ctx context.Context, opts Options) error {
 	return firstErr
 }
 
-func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime) error {
+func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
 	auth := services.NewAuthService(opts.Paths.Tokens(), opts.Paths.FileMode())
 
 	srv := &http.Server{
@@ -107,6 +109,7 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 			Registry:    reg,
 			Runtime:     rt,
 			Auth:        auth,
+			Events:      bus,
 			RequireAuth: opts.Config.App.HTTPAuth,
 			Logger:      opts.Logger.With("component", "api"),
 		}),
@@ -124,9 +127,9 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 	return srv.ListenAndServe()
 }
 
-func runServer(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime) error {
+func runServer(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
 	cfg := opts.Config.Server
-	handler := server.NewHandler(cfg, reg, rt, opts.Logger.With("component", "server"))
+	handler := server.NewHandler(cfg, reg, rt, bus, opts.Logger.With("component", "server"))
 	defer handler.Close()
 
 	mux := http.NewServeMux()

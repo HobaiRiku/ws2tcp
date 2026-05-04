@@ -12,12 +12,13 @@
 8. Finished `api-rest`
    - added persisted argon2id token auth + scope-aware middleware
    - added token CRUD, runtime stats, client inventory, and config replace endpoints
+9. Finished `api-events`
+   - added shared in-process event bus plus `/api/events/stream` and `/api/events/ws`
+   - published `tunnel.state` and `server.conn.*` runtime events from the client/server data plane
 
 ## Left to do
 
-1. `api-events`
-   - management-plane SSE / WebSocket event stream
-2. `web-embed`
+1. `web-embed`
    - embed SPA assets and add SPA fallback handler
-3. `tests-interop`
+2. `tests-interop`
    - Go↔Node interop fixtures after legacy payload capture is available

@@ -17,6 +17,7 @@ import (
 	"websocket2Tcp/internal/core/frame"
 	"websocket2Tcp/internal/core/wsproxy"
 	"websocket2Tcp/internal/services"
+	"websocket2Tcp/internal/services/events"
 )
 
 // dialTimeout is the upper bound for the inner TCP dial; intentionally
@@ -31,6 +32,7 @@ type Handler struct {
 	registry *services.Registry
 	replay   *ReplayStore
 	runtime  *services.Runtime
+	events   *events.Bus
 	log      *slog.Logger
 
 	// dialer is settable so tests can inject a stub. Defaults to a real
@@ -39,13 +41,14 @@ type Handler struct {
 }
 
 // NewHandler constructs the upgrade handler.
-func NewHandler(cfg config.ServerConfig, reg *services.Registry, rt *services.Runtime, log *slog.Logger) *Handler {
+func NewHandler(cfg config.ServerConfig, reg *services.Registry, rt *services.Runtime, bus *events.Bus, log *slog.Logger) *Handler {
 	d := &net.Dialer{Timeout: dialTimeout}
 	return &Handler{
 		cfg:      cfg,
 		registry: reg,
 		replay:   NewReplayStore(),
 		runtime:  rt,
+		events:   bus,
 		log:      log,
 		dialer:   d.DialContext,
 	}
@@ -127,7 +130,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Once we've upgraded, ResponseWriter is hijacked. Past this point
 	// we mustn't write to w — only the ws conn or tcp conn.
-	if err := h.run(r.Context(), wsConn, tcp, cmd, identity); err != nil {
+	if err := h.run(r.Context(), wsConn, tcp, cmd, identity, ClientIP(r, h.cfg.TrustProxy)); err != nil {
 		h.log.Warn("bridge ended with error",
 			"err", err,
 			"client_id", cmd.ClientID,
@@ -140,7 +143,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // run sends the streamUp frame and runs wsproxy.Bridge until either side
 // closes. ws is closed on return; tcp is closed by Bridge.
-func (h *Handler) run(ctx context.Context, ws *websocket.Conn, tcp net.Conn, cmd HandshakeCommand, id services.Identity) error {
+func (h *Handler) run(ctx context.Context, ws *websocket.Conn, tcp net.Conn, cmd HandshakeCommand, id services.Identity, clientIP string) error {
 	useEncryption := h.cfg.UseEncryption
 
 	var endToEndKey []byte
@@ -178,6 +181,18 @@ func (h *Handler) run(ctx context.Context, ws *websocket.Conn, tcp net.Conn, cmd
 
 	h.runtime.IncClient(id.ID)
 	defer h.runtime.DecClient(id.ID)
+	h.events.Emit("server.conn.opened", map[string]any{
+		"client_id":   id.ID,
+		"client_ip":   clientIP,
+		"target_host": cmd.TargetHost,
+		"target_port": cmd.TargetPort,
+	})
+	defer h.events.Emit("server.conn.closed", map[string]any{
+		"client_id":   id.ID,
+		"client_ip":   clientIP,
+		"target_host": cmd.TargetHost,
+		"target_port": cmd.TargetPort,
+	})
 
 	netConn := websocket.NetConn(ctx, ws, websocket.MessageBinary)
 	defer ws.Close(websocket.StatusNormalClosure, "")
