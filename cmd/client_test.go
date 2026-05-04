@@ -12,7 +12,7 @@ import (
 func TestClientEndpointShowAndSet(t *testing.T) {
 	home := writeTestConfig(t)
 
-	out, err := executeRoot(t, "--home", home, "client", "endpoint", "show")
+	out, err := executeRoot(t, "--home", home, "client", "endpoint", "show", "--client", "prod")
 	if err != nil {
 		t.Fatalf("endpoint show returned error: %v", err)
 	}
@@ -21,6 +21,7 @@ func TestClientEndpointShowAndSet(t *testing.T) {
 	}
 
 	_, err = executeRoot(t, "--home", home, "client", "endpoint", "set",
+		"--client", "prod",
 		"--host", "api.example.com",
 		"--ip", "198.51.100.12",
 		"--port", "8443",
@@ -34,15 +35,15 @@ func TestClientEndpointShowAndSet(t *testing.T) {
 	}
 
 	cfg := mustLoadConfig(t, filepath.Join(home, "config.yaml"))
-	if cfg.Client.Endpoint.Host != "api.example.com" || cfg.Client.Endpoint.Port != 8443 || !cfg.Client.Endpoint.WSS {
-		t.Fatalf("unexpected endpoint after set: %+v", cfg.Client.Endpoint)
+	if cfg.Client.Endpoints[0].Host != "api.example.com" || cfg.Client.Endpoints[0].Port != 8443 || !cfg.Client.Endpoints[0].WSS {
+		t.Fatalf("unexpected endpoint after set: %+v", cfg.Client.Endpoints[0])
 	}
 }
 
 func TestClientTunnelCommands(t *testing.T) {
 	home := writeTestConfig(t)
 
-	out, err := executeRoot(t, "--home", home, "client", "tunnels", "list")
+	out, err := executeRoot(t, "--home", home, "client", "tunnels", "list", "--client", "prod")
 	if err != nil {
 		t.Fatalf("tunnels list returned error: %v", err)
 	}
@@ -51,6 +52,7 @@ func TestClientTunnelCommands(t *testing.T) {
 	}
 
 	_, err = executeRoot(t, "--home", home, "client", "tunnels", "add",
+		"--client", "prod",
 		"--name", "db",
 		"--listen", "127.0.0.1:3306",
 		"--target", "10.0.0.10:3306",
@@ -60,6 +62,7 @@ func TestClientTunnelCommands(t *testing.T) {
 	}
 
 	_, err = executeRoot(t, "--home", home, "client", "tunnels", "update", "db",
+		"--client", "prod",
 		"--listen", "127.0.0.1:13306",
 		"--target", "db.internal:3307",
 	)
@@ -67,17 +70,17 @@ func TestClientTunnelCommands(t *testing.T) {
 		t.Fatalf("tunnels update returned error: %v", err)
 	}
 
-	_, err = executeRoot(t, "--home", home, "client", "tunnels", "rm", "t1")
+	_, err = executeRoot(t, "--home", home, "client", "tunnels", "rm", "t1", "--client", "prod")
 	if err != nil {
 		t.Fatalf("tunnels rm returned error: %v", err)
 	}
 
 	cfg := mustLoadConfig(t, filepath.Join(home, "config.yaml"))
-	if len(cfg.Client.Tunnels) != 1 {
-		t.Fatalf("unexpected tunnel count: %d", len(cfg.Client.Tunnels))
+	if len(cfg.Client.Clients[0].Tunnels) != 1 {
+		t.Fatalf("unexpected tunnel count: %d", len(cfg.Client.Clients[0].Tunnels))
 	}
-	if cfg.Client.Tunnels[0].Name != "db" || cfg.Client.Tunnels[0].Listen != "127.0.0.1:13306" || cfg.Client.Tunnels[0].TargetPort != 3307 {
-		t.Fatalf("unexpected tunnel after mutations: %+v", cfg.Client.Tunnels[0])
+	if cfg.Client.Clients[0].Tunnels[0].Name != "db" || cfg.Client.Clients[0].Tunnels[0].Listen != "127.0.0.1:13306" || cfg.Client.Clients[0].Tunnels[0].TargetPort != 3307 {
+		t.Fatalf("unexpected tunnel after mutations: %+v", cfg.Client.Clients[0].Tunnels[0])
 	}
 }
 
@@ -100,18 +103,22 @@ server:
       secret: s1
 client:
   enabled: true
-  client_id: u1
-  client_secret: s1
-  endpoint:
-    host: x
-    port: 3005
-    path: /c
-    aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
-  tunnels:
-    - name: t1
-      listen: "127.0.0.1:1"
-      target_host: x
-      target_port: 22
+  endpoints:
+    - name: edge
+      host: x
+      port: 3005
+      path: /c
+      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+  clients:
+    - name: prod
+      endpoint: edge
+      client_id: u1
+      client_secret: s1
+      tunnels:
+        - name: t1
+          listen: "127.0.0.1:1"
+          target_host: x
+          target_port: 22
 `
 	if err := os.WriteFile(filepath.Join(home, "config.yaml"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)

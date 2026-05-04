@@ -32,6 +32,8 @@ type Manager struct {
 }
 
 type runningTunnel struct {
+	key    string
+	client string
 	cfg    config.Tunnel
 	ep     config.Endpoint
 	auth   services.ClientCredentials
@@ -71,44 +73,50 @@ func (m *Manager) reconcile() {
 		return
 	}
 
-	desired := map[string]config.Tunnel{}
-	auth := m.registry.ClientCredentials()
-	ep := m.registry.ClientEndpoint()
-	for _, t := range m.registry.Tunnels() {
-		desired[t.Name] = t
+	desired := map[string]services.ClientTunnelBinding{}
+	for _, binding := range m.registry.ClientTunnelBindings() {
+		desired[binding.Key] = binding
 	}
 
 	// 1. cancel removals and changes
-	for name, rt := range m.running {
-		want, ok := desired[name]
+	for key, rt := range m.running {
+		want, ok := desired[key]
 		if !ok {
-			m.stopLocked(name)
+			m.stopLocked(key)
 			continue
 		}
-		if !reflect.DeepEqual(rt.cfg, want) || !reflect.DeepEqual(rt.ep, ep) || !reflect.DeepEqual(rt.auth, auth) {
-			m.stopLocked(name)
+		if !reflect.DeepEqual(rt.cfg, want.Tunnel) || !reflect.DeepEqual(rt.ep, want.Endpoint) || !reflect.DeepEqual(rt.auth, want.Credentials) {
+			m.stopLocked(key)
 		}
 	}
 
 	// 2. start everything desired but not running
-	for name, want := range desired {
-		if _, ok := m.running[name]; ok {
+	for key, want := range desired {
+		if _, ok := m.running[key]; ok {
 			continue
 		}
-		m.startLocked(want, ep, auth)
+		m.startLocked(want)
 	}
 }
 
-func (m *Manager) startLocked(t config.Tunnel, ep config.Endpoint, auth services.ClientCredentials) {
+func (m *Manager) startLocked(binding services.ClientTunnelBinding) {
 	tCtx, cancel := context.WithCancel(m.rootCtx)
-	rt := &runningTunnel{cfg: t, ep: ep, auth: auth, cancel: cancel, done: make(chan struct{})}
-	m.running[t.Name] = rt
+	rt := &runningTunnel{
+		key:    binding.Key,
+		client: binding.ClientName,
+		cfg:    binding.Tunnel,
+		ep:     binding.Endpoint,
+		auth:   binding.Credentials,
+		cancel: cancel,
+		done:   make(chan struct{}),
+	}
+	m.running[binding.Key] = rt
 
-	tunnel := NewTunnel(t, ep, auth, m.runtime, m.log)
+	tunnel := NewTunnel(binding.Tunnel, binding.Endpoint, binding.Credentials, m.runtime, m.log.With("client", binding.ClientName))
 	go func() {
 		defer close(rt.done)
 		if err := tunnel.Run(tCtx); err != nil {
-			m.log.Error("tunnel exited with error", "tunnel", t.Name, "err", err)
+			m.log.Error("tunnel exited with error", "client", binding.ClientName, "tunnel", binding.Tunnel.Name, "err", err)
 		}
 	}()
 }
@@ -131,7 +139,7 @@ func (m *Manager) shutdownAll() {
 	}
 }
 
-// Running returns the names of currently-running tunnels (snapshot).
+// Running returns the currently-running client+tunnel keys (snapshot).
 func (m *Manager) Running() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()

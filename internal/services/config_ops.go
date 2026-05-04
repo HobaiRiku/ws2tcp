@@ -13,10 +13,10 @@ func (r *Registry) ConfigPath() string {
 	return r.configPath
 }
 
-// SetClientCredentials updates client.client_id and client.client_secret.
-func (r *Registry) SetClientCredentials(clientID, clientSecret string) error {
+// SetClientCredentials updates the selected client profile credentials.
+func (r *Registry) SetClientCredentials(clientName, clientID, clientSecret string) error {
 	return r.mutateConfig(func(doc *yaml.Node) error {
-		client, err := findClientMapping(doc)
+		client, err := findConfiguredClientNode(doc, clientName)
 		if err != nil {
 			return err
 		}
@@ -42,8 +42,21 @@ func (r *Registry) SetConfigValue(path string, raw string) error {
 		}
 
 		for i, part := range parts {
-			value, _, ok := mappingValue(node, part)
-			if !ok {
+			var value *yaml.Node
+			switch node.Kind {
+			case yaml.MappingNode:
+				var ok bool
+				value, _, ok = mappingValue(node, part)
+				if !ok {
+					return fmt.Errorf("config path %q not found", path)
+				}
+			case yaml.SequenceNode:
+				idx, err := strconv.Atoi(part)
+				if err != nil || idx < 0 || idx >= len(node.Content) {
+					return fmt.Errorf("config path %q not found", path)
+				}
+				value = node.Content[idx]
+			default:
 				return fmt.Errorf("config path %q not found", path)
 			}
 			if i == len(parts)-1 {
@@ -58,8 +71,8 @@ func (r *Registry) SetConfigValue(path string, raw string) error {
 				value.Value = val
 				return nil
 			}
-			if value.Kind != yaml.MappingNode {
-				return fmt.Errorf("config path %q does not resolve to a mapping", strings.Join(parts[:i+1], "."))
+			if value.Kind != yaml.MappingNode && value.Kind != yaml.SequenceNode {
+				return fmt.Errorf("config path %q does not resolve to a mapping or sequence", strings.Join(parts[:i+1], "."))
 			}
 			node = value
 		}

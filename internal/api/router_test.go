@@ -49,7 +49,7 @@ func TestHealthVersionAndConfigEndpoints(t *testing.T) {
 func TestClientEndpoints(t *testing.T) {
 	router, p := newTestRouter(t)
 
-	rr := performJSON(t, router, http.MethodPut, "/api/client/endpoint", config.Endpoint{
+	rr := performJSON(t, router, http.MethodPut, "/api/client/prod/endpoint", config.Endpoint{
 		Host:                  "api.example.com",
 		IP:                    "198.51.100.20",
 		Port:                  8443,
@@ -62,7 +62,7 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("unexpected endpoint put response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodPost, "/api/client/tunnels", config.Tunnel{
+	rr = performJSON(t, router, http.MethodPost, "/api/client/prod/tunnels", config.Tunnel{
 		Name:       "db",
 		Listen:     "127.0.0.1:3306",
 		TargetHost: "10.0.0.10",
@@ -72,7 +72,7 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("unexpected tunnel post response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodPatch, "/api/client/tunnels/db", tunnelPatchRequest{
+	rr = performJSON(t, router, http.MethodPatch, "/api/client/prod/tunnels/db", tunnelPatchRequest{
 		Listen:     ptr("127.0.0.1:13306"),
 		TargetHost: ptr("db.internal"),
 		TargetPort: intPtr(3307),
@@ -81,7 +81,7 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("unexpected tunnel patch response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodDelete, "/api/client/tunnels/t1", nil)
+	rr = performJSON(t, router, http.MethodDelete, "/api/client/prod/tunnels/t1", nil)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("unexpected tunnel delete response: %d %s", rr.Code, rr.Body.String())
 	}
@@ -90,11 +90,11 @@ func TestClientEndpoints(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Client.Endpoint.Host != "api.example.com" || cfg.Client.Endpoint.Port != 8443 {
-		t.Fatalf("unexpected endpoint after api update: %+v", cfg.Client.Endpoint)
+	if cfg.Client.Endpoints[0].Host != "api.example.com" || cfg.Client.Endpoints[0].Port != 8443 {
+		t.Fatalf("unexpected endpoint after api update: %+v", cfg.Client.Endpoints[0])
 	}
-	if len(cfg.Client.Tunnels) != 1 || cfg.Client.Tunnels[0].Name != "db" || cfg.Client.Tunnels[0].TargetPort != 3307 {
-		t.Fatalf("unexpected tunnels after api update: %+v", cfg.Client.Tunnels)
+	if len(cfg.Client.Clients[0].Tunnels) != 1 || cfg.Client.Clients[0].Tunnels[0].Name != "db" || cfg.Client.Clients[0].Tunnels[0].TargetPort != 3307 {
+		t.Fatalf("unexpected tunnels after api update: %+v", cfg.Client.Clients[0].Tunnels)
 	}
 }
 
@@ -167,18 +167,22 @@ server:
       secret: s1
 client:
   enabled: true
-  client_id: u1
-  client_secret: s1
-  endpoint:
-    host: x
-    port: 3005
-    path: /c
-    aes_key: "` + testAESKey + `"
-  tunnels:
-    - name: t1
-      listen: "127.0.0.1:1"
-      target_host: x
-      target_port: 22
+  endpoints:
+    - name: edge
+      host: x
+      port: 3005
+      path: /c
+      aes_key: "` + testAESKey + `"
+  clients:
+    - name: prod
+      endpoint: edge
+      client_id: u1
+      client_secret: s1
+      tunnels:
+        - name: t1
+          listen: "127.0.0.1:1"
+          target_host: x
+          target_port: 22
 `
 	if err := os.WriteFile(filepath.Join(p.Home, "config.yaml"), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)

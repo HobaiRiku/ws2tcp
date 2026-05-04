@@ -92,42 +92,74 @@ func (c *Config) validateClient() []string {
 		return nil
 	}
 	var errs []string
-	if c.Client.ClientID == "" || c.Client.ClientSecret == "" {
-		errs = append(errs, "client.client_id and client.client_secret required when client.enabled")
-	}
-	ep := c.Client.Endpoint
-	if ep.Host == "" {
-		errs = append(errs, "client.endpoint.host required")
-	}
-	if ep.Port <= 0 || ep.Port > 65535 {
-		errs = append(errs, fmt.Sprintf("client.endpoint.port out of range: %d", ep.Port))
-	}
-	if ep.Path == "" {
-		errs = append(errs, "client.endpoint.path required")
-	}
-	if err := validateAESKey(ep.AESKey); err != nil {
-		errs = append(errs, fmt.Sprintf("client.endpoint.aes_key: %v", err))
-	}
-
-	tNames := map[string]bool{}
-	for i, t := range c.Client.Tunnels {
-		prefix := fmt.Sprintf("client.tunnels[%d]", i)
-		if t.Name == "" {
+	endpointNames := map[string]bool{}
+	for i, ep := range c.Client.Endpoints {
+		prefix := fmt.Sprintf("client.endpoints[%d]", i)
+		if ep.Name == "" {
 			errs = append(errs, prefix+".name required")
 			continue
 		}
-		if tNames[t.Name] {
-			errs = append(errs, fmt.Sprintf("%s.name %q duplicated", prefix, t.Name))
+		if endpointNames[ep.Name] {
+			errs = append(errs, fmt.Sprintf("%s.name %q duplicated", prefix, ep.Name))
 		}
-		tNames[t.Name] = true
-		if t.Listen == "" {
-			errs = append(errs, prefix+".listen required")
+		endpointNames[ep.Name] = true
+		if ep.Host == "" {
+			errs = append(errs, prefix+".host required")
 		}
-		if t.TargetHost == "" {
-			errs = append(errs, prefix+".target_host required")
+		if ep.Port <= 0 || ep.Port > 65535 {
+			errs = append(errs, fmt.Sprintf("%s.port out of range: %d", prefix, ep.Port))
 		}
-		if t.TargetPort <= 0 || t.TargetPort > 65535 {
-			errs = append(errs, fmt.Sprintf("%s.target_port out of range: %d", prefix, t.TargetPort))
+		if ep.Path == "" {
+			errs = append(errs, prefix+".path required")
+		}
+		if err := validateAESKey(ep.AESKey); err != nil {
+			errs = append(errs, fmt.Sprintf("%s.aes_key: %v", prefix, err))
+		}
+	}
+
+	clientNames := map[string]bool{}
+	for i, client := range c.Client.Clients {
+		prefix := fmt.Sprintf("client.clients[%d]", i)
+		if client.Name == "" {
+			errs = append(errs, prefix+".name required")
+			continue
+		}
+		if clientNames[client.Name] {
+			errs = append(errs, fmt.Sprintf("%s.name %q duplicated", prefix, client.Name))
+		}
+		clientNames[client.Name] = true
+		if client.Endpoint == "" {
+			errs = append(errs, prefix+".endpoint required")
+		} else if !endpointNames[client.Endpoint] {
+			errs = append(errs, fmt.Sprintf("%s.endpoint %q does not match any client.endpoints[*].name", prefix, client.Endpoint))
+		}
+		if client.ClientID == "" || client.ClientSecret == "" {
+			errs = append(errs, prefix+".client_id and client_secret required")
+		}
+		if strings.ContainsAny(client.ClientID+client.ClientSecret, ":") {
+			errs = append(errs, fmt.Sprintf("%s client_id/client_secret must not contain ':' (handshake delimiter)", prefix))
+		}
+
+		tunnelNames := map[string]bool{}
+		for j, t := range client.Tunnels {
+			tPrefix := fmt.Sprintf("%s.tunnels[%d]", prefix, j)
+			if t.Name == "" {
+				errs = append(errs, tPrefix+".name required")
+				continue
+			}
+			if tunnelNames[t.Name] {
+				errs = append(errs, fmt.Sprintf("%s.name %q duplicated", tPrefix, t.Name))
+			}
+			tunnelNames[t.Name] = true
+			if t.Listen == "" {
+				errs = append(errs, tPrefix+".listen required")
+			}
+			if t.TargetHost == "" {
+				errs = append(errs, tPrefix+".target_host required")
+			}
+			if t.TargetPort <= 0 || t.TargetPort > 65535 {
+				errs = append(errs, fmt.Sprintf("%s.target_port out of range: %d", tPrefix, t.TargetPort))
+			}
 		}
 	}
 	return errs

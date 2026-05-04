@@ -87,18 +87,27 @@ server:
       secret: s2
 client:
   enabled: true
-  client_id: a
-  client_secret: b
-  endpoint:
-    host: x
-    port: 80
-    path: /c
-    aes_key: "`+validKey+`"
-  tunnels:
-    - name: t1
-      listen: "127.0.0.1:1"
-      target_host: x
-      target_port: 22
+  endpoints:
+    - name: edge
+      host: x
+      port: 80
+      path: /c
+      aes_key: "`+validKey+`"
+    - name: edge
+      host: y
+      port: 81
+      path: /c
+      aes_key: "`+validKey+`"
+  clients:
+    - name: prod
+      endpoint: missing
+      client_id: a
+      client_secret: b
+      tunnels:
+        - name: t1
+          listen: "127.0.0.1:1"
+          target_host: x
+          target_port: 22
 `)
 	_, err := Load(p)
 	if err == nil {
@@ -106,7 +115,7 @@ client:
 	}
 	msg := err.Error()
 	for _, want := range []string{
-		"server.aes_key", "duplicated",
+		"server.aes_key", "duplicated", "does not match any client.endpoints",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("missing %q in:\n%s", want, msg)

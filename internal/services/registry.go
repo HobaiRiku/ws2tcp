@@ -86,12 +86,11 @@ func (r *Registry) snap() *snapshot { return r.cur.Load() }
 func buildSnapshot(cfg *config.Config) (*snapshot, error) {
 	s := &snapshot{
 		byID:         map[string]*Identity{},
-		clientID:     cfg.Client.ClientID,
-		clientSecret: cfg.Client.ClientSecret,
-		endpoint:     cfg.Client.Endpoint,
-		tunnels:      append([]config.Tunnel(nil), cfg.Client.Tunnels...),
+		endpoints:    map[string]config.Endpoint{},
+		clientByName: map[string]*config.ClientProfile{},
 	}
 	s.identities = make([]Identity, 0, len(cfg.Server.Clients))
+	s.clientProfiles = make([]config.ClientProfile, 0, len(cfg.Client.Clients))
 
 	for i, c := range cfg.Server.Clients {
 		rules, err := parseACL(c.ACL)
@@ -104,6 +103,18 @@ func buildSnapshot(cfg *config.Config) (*snapshot, error) {
 	// byID points into the identities slice; populate after the slice is final.
 	for i := range s.identities {
 		s.byID[s.identities[i].ID] = &s.identities[i]
+	}
+
+	for _, ep := range cfg.Client.Endpoints {
+		s.endpoints[ep.Name] = ep
+	}
+	for _, client := range cfg.Client.Clients {
+		cp := client
+		cp.Tunnels = append([]config.Tunnel(nil), client.Tunnels...)
+		s.clientProfiles = append(s.clientProfiles, cp)
+	}
+	for i := range s.clientProfiles {
+		s.clientByName[s.clientProfiles[i].Name] = &s.clientProfiles[i]
 	}
 
 	return s, nil

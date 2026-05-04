@@ -16,7 +16,7 @@ import (
 func clientCmd() *cobra.Command {
 	client := &cobra.Command{
 		Use:   "client",
-		Short: "Manage client endpoint and tunnels",
+		Short: "Manage named client profiles and tunnels",
 	}
 	client.AddCommand(
 		clientEndpointCmd(),
@@ -28,7 +28,7 @@ func clientCmd() *cobra.Command {
 func clientEndpointCmd() *cobra.Command {
 	endpoint := &cobra.Command{
 		Use:   "endpoint",
-		Short: "Show or update the shared client endpoint",
+		Short: "Show or update the selected client's resolved endpoint",
 	}
 	endpoint.AddCommand(
 		clientEndpointShowCmd(),
@@ -38,15 +38,20 @@ func clientEndpointCmd() *cobra.Command {
 }
 
 func clientEndpointShowCmd() *cobra.Command {
-	return &cobra.Command{
+	var clientName string
+	cmd := &cobra.Command{
 		Use:   "show",
-		Short: "Print the current client endpoint",
+		Short: "Print the selected client's resolved endpoint",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			reg, err := loadRegistry()
 			if err != nil {
 				return err
 			}
-			out, err := yaml.Marshal(reg.ClientEndpoint())
+			endpoint, err := reg.ClientEndpoint(clientName)
+			if err != nil {
+				return err
+			}
+			out, err := yaml.Marshal(endpoint)
 			if err != nil {
 				return fmt.Errorf("marshal endpoint: %w", err)
 			}
@@ -54,10 +59,13 @@ func clientEndpointShowCmd() *cobra.Command {
 			return nil
 		},
 	}
+	addClientNameFlag(cmd, &clientName)
+	return cmd
 }
 
 func clientEndpointSetCmd() *cobra.Command {
 	var (
+		clientName            string
 		host                  string
 		ip                    string
 		port                  int
@@ -69,13 +77,16 @@ func clientEndpointSetCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "set",
-		Short: "Update the shared client endpoint",
+		Short: "Update the selected client's referenced endpoint",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			reg, err := loadRegistry()
 			if err != nil {
 				return err
 			}
-			ep := reg.ClientEndpoint()
+			ep, err := reg.ClientEndpoint(clientName)
+			if err != nil {
+				return err
+			}
 			if cmd.Flags().Changed("host") {
 				ep.Host = host
 			}
@@ -97,7 +108,7 @@ func clientEndpointSetCmd() *cobra.Command {
 			if cmd.Flags().Changed("ssl-reject-unauthorized") {
 				ep.SSLRejectUnauthorized = sslRejectUnauthorized
 			}
-			if err := reg.SetClientEndpoint(ep); err != nil {
+			if err := reg.SetClientEndpoint(clientName, ep); err != nil {
 				return fmt.Errorf("set client endpoint: %w", err)
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "client endpoint updated")
@@ -105,6 +116,7 @@ func clientEndpointSetCmd() *cobra.Command {
 		},
 	}
 
+	addClientNameFlag(cmd, &clientName)
 	cmd.Flags().StringVar(&host, "host", "", "upstream ws host for SNI and Host header")
 	cmd.Flags().StringVar(&ip, "ip", "", "optional direct dial IP override")
 	cmd.Flags().IntVar(&port, "port", 0, "upstream ws port")
@@ -118,7 +130,7 @@ func clientEndpointSetCmd() *cobra.Command {
 func clientTunnelsCmd() *cobra.Command {
 	tunnels := &cobra.Command{
 		Use:   "tunnels",
-		Short: "Manage client tunnels",
+		Short: "Manage tunnels for a selected client profile",
 	}
 	tunnels.AddCommand(
 		clientTunnelsListCmd(),
@@ -130,29 +142,37 @@ func clientTunnelsCmd() *cobra.Command {
 }
 
 func clientTunnelsListCmd() *cobra.Command {
-	return &cobra.Command{
+	var clientName string
+	cmd := &cobra.Command{
 		Use:   "list",
-		Short: "List configured client tunnels",
+		Short: "List configured tunnels for a selected client",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			reg, err := loadRegistry()
 			if err != nil {
 				return err
 			}
+			tunnels, err := reg.Tunnels(clientName)
+			if err != nil {
+				return err
+			}
 			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
 			_, _ = fmt.Fprintln(tw, "NAME\tLISTEN\tTARGET")
-			for _, tunnel := range reg.Tunnels() {
+			for _, tunnel := range tunnels {
 				_, _ = fmt.Fprintf(tw, "%s\t%s\t%s:%d\n", tunnel.Name, tunnel.Listen, tunnel.TargetHost, tunnel.TargetPort)
 			}
 			return tw.Flush()
 		},
 	}
+	addClientNameFlag(cmd, &clientName)
+	return cmd
 }
 
 func clientTunnelsAddCmd() *cobra.Command {
 	var (
-		name   string
-		listen string
-		target string
+		clientName string
+		name       string
+		listen     string
+		target     string
 	)
 
 	cmd := &cobra.Command{
@@ -167,7 +187,7 @@ func clientTunnelsAddCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := reg.CreateTunnel(config.Tunnel{
+			if err := reg.CreateTunnel(clientName, config.Tunnel{
 				Name:       name,
 				Listen:     listen,
 				TargetHost: host,
@@ -180,6 +200,7 @@ func clientTunnelsAddCmd() *cobra.Command {
 		},
 	}
 
+	addClientNameFlag(cmd, &clientName)
 	cmd.Flags().StringVar(&name, "name", "", "tunnel name")
 	cmd.Flags().StringVar(&listen, "listen", "", "local listen address")
 	cmd.Flags().StringVar(&target, "target", "", "target in host:port form")
@@ -191,8 +212,9 @@ func clientTunnelsAddCmd() *cobra.Command {
 
 func clientTunnelsUpdateCmd() *cobra.Command {
 	var (
-		listen string
-		target string
+		clientName string
+		listen     string
+		target     string
 	)
 
 	cmd := &cobra.Command{
@@ -224,7 +246,7 @@ func clientTunnelsUpdateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := reg.UpdateTunnel(args[0], update); err != nil {
+			if err := reg.UpdateTunnel(clientName, args[0], update); err != nil {
 				return fmt.Errorf("update tunnel: %w", err)
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "tunnel updated")
@@ -232,13 +254,15 @@ func clientTunnelsUpdateCmd() *cobra.Command {
 		},
 	}
 
+	addClientNameFlag(cmd, &clientName)
 	cmd.Flags().StringVar(&listen, "listen", "", "local listen address")
 	cmd.Flags().StringVar(&target, "target", "", "target in host:port form")
 	return cmd
 }
 
 func clientTunnelsRmCmd() *cobra.Command {
-	return &cobra.Command{
+	var clientName string
+	cmd := &cobra.Command{
 		Use:   "rm <name>",
 		Short: "Remove a client tunnel",
 		Args:  cobra.ExactArgs(1),
@@ -247,13 +271,20 @@ func clientTunnelsRmCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := reg.DeleteTunnel(args[0]); err != nil {
+			if err := reg.DeleteTunnel(clientName, args[0]); err != nil {
 				return fmt.Errorf("remove tunnel: %w", err)
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "tunnel removed")
 			return nil
 		},
 	}
+	addClientNameFlag(cmd, &clientName)
+	return cmd
+}
+
+func addClientNameFlag(cmd *cobra.Command, target *string) {
+	cmd.Flags().StringVar(target, "client", "", "client profile name")
+	_ = cmd.MarkFlagRequired("client")
 }
 
 func splitTarget(target string) (string, int, error) {

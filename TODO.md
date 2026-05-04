@@ -8,6 +8,7 @@
 4. Core config CLI (`show`, `path`, `set`, `client-auth set`)
 5. Base management REST router in `internal/api`
 6. Management API wired into `internal/app` with loopback-only interim auth guard
+7. Client model refactored to named `endpoints[]` plus named `clients[]`, with each client owning its own credentials and tunnels
 
 ## Left to do
 

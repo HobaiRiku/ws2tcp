@@ -79,7 +79,7 @@ func configSetCmd() *cobra.Command {
 func configClientAuthCmd() *cobra.Command {
 	clientAuth := &cobra.Command{
 		Use:   "client-auth",
-		Short: "Manage shared client authentication settings",
+		Short: "Manage named client authentication settings",
 	}
 	clientAuth.AddCommand(configClientAuthSetCmd())
 	return clientAuth
@@ -87,19 +87,20 @@ func configClientAuthCmd() *cobra.Command {
 
 func configClientAuthSetCmd() *cobra.Command {
 	var (
+		clientName   string
 		clientID     string
 		clientSecret string
 	)
 
 	cmd := &cobra.Command{
 		Use:   "set",
-		Short: "Update client.client_id and client.client_secret",
+		Short: "Update one client profile's client_id and client_secret",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			reg, err := loadRegistry()
 			if err != nil {
 				return err
 			}
-			if err := reg.SetClientCredentials(clientID, clientSecret); err != nil {
+			if err := reg.SetClientCredentials(clientName, clientID, clientSecret); err != nil {
 				return fmt.Errorf("set client auth: %w", err)
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "client auth updated")
@@ -107,8 +108,10 @@ func configClientAuthSetCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVar(&clientName, "client", "", "client profile name")
 	cmd.Flags().StringVar(&clientID, "client-id", "", "shared client id")
 	cmd.Flags().StringVar(&clientSecret, "client-secret", "", "shared client secret")
+	_ = cmd.MarkFlagRequired("client")
 	_ = cmd.MarkFlagRequired("client-id")
 	_ = cmd.MarkFlagRequired("client-secret")
 	return cmd

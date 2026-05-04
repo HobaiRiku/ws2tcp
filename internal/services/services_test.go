@@ -33,12 +33,20 @@ func sampleConfig() *config.Config {
 			},
 		},
 		Client: config.ClientConfig{
-			Enabled:      true,
-			ClientID:     "u1",
-			ClientSecret: "s1",
-			Endpoint:     config.Endpoint{Host: "x", Port: 3005, Path: "/c", AESKey: k32},
-			Tunnels: []config.Tunnel{
-				{Name: "t1", Listen: "127.0.0.1:1", TargetHost: "x", TargetPort: 22},
+			Enabled: true,
+			Endpoints: []config.Endpoint{
+				{Name: "edge", Host: "x", Port: 3005, Path: "/c", AESKey: k32},
+			},
+			Clients: []config.ClientProfile{
+				{
+					Name:         "prod",
+					Endpoint:     "edge",
+					ClientID:     "u1",
+					ClientSecret: "s1",
+					Tunnels: []config.Tunnel{
+						{Name: "t1", Listen: "127.0.0.1:1", TargetHost: "x", TargetPort: 22},
+					},
+				},
 			},
 		},
 		App: config.AppConfig{HTTPListen: "127.0.0.1:7321", HTTPAuth: true, LogLevel: "info"},
@@ -76,18 +84,22 @@ server:
           ports: ["22", "80-90"]
 client:
   enabled: true
-  client_id: u1
-  client_secret: s1
-  endpoint:
-    host: x
-    port: 3005
-    path: /c
-    aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
-  tunnels:
-    - name: t1
-      listen: "127.0.0.1:1"
-      target_host: x
-      target_port: 22
+  endpoints:
+    - name: edge
+      host: x
+      port: 3005
+      path: /c
+      aes_key: "njpjvjkgfykgpqpcksvjydvlctgznlnz"
+  clients:
+    - name: prod
+      endpoint: edge
+      client_id: u1
+      client_secret: s1
+      tunnels:
+        - name: t1
+          listen: "127.0.0.1:1"
+          target_host: x
+          target_port: 22
 `) + "\n"
 	if err := os.WriteFile(p.Config(), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
@@ -200,7 +212,10 @@ func TestApplySwapsSnapshot(t *testing.T) {
 
 func TestClientEndpoint(t *testing.T) {
 	r, _ := New(sampleConfig())
-	ep := r.ClientEndpoint()
+	ep, err := r.ClientEndpoint("prod")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if ep.Host != "x" || ep.Port != 3005 {
 		t.Fatalf("got host=%q port=%d", ep.Host, ep.Port)
 	}
@@ -209,7 +224,7 @@ func TestClientEndpoint(t *testing.T) {
 func TestSetClientEndpointPersistsAndApplies(t *testing.T) {
 	r, p := newStoredRegistry(t)
 
-	err := r.SetClientEndpoint(config.Endpoint{
+	err := r.SetClientEndpoint("prod", config.Endpoint{
 		Host:                  "next.example.com",
 		IP:                    "203.0.113.20",
 		Port:                  8443,
@@ -222,7 +237,10 @@ func TestSetClientEndpointPersistsAndApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ep := r.ClientEndpoint()
+	ep, err := r.ClientEndpoint("prod")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if ep.Host != "next.example.com" || ep.Port != 8443 || !ep.WSS {
 		t.Fatalf("updated endpoint not applied: %+v", ep)
 	}
@@ -247,7 +265,7 @@ func TestSetClientEndpointRollsBackOnInvalidConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = r.SetClientEndpoint(config.Endpoint{
+	err = r.SetClientEndpoint("prod", config.Endpoint{
 		Host:   "",
 		Port:   3005,
 		Path:   "/connect",
@@ -264,7 +282,11 @@ func TestSetClientEndpointRollsBackOnInvalidConfig(t *testing.T) {
 	if string(after) != string(before) {
 		t.Fatal("config file was not rolled back after invalid endpoint update")
 	}
-	if r.ClientEndpoint().Host != "x" {
+	ep, err := r.ClientEndpoint("prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ep.Host != "x" {
 		t.Fatal("live registry changed after failed endpoint update")
 	}
 }
@@ -382,7 +404,7 @@ func TestSetClientACLRollsBackOnInvalidConfig(t *testing.T) {
 func TestCreateTunnelPersistsAndApplies(t *testing.T) {
 	r, p := newStoredRegistry(t)
 
-	err := r.CreateTunnel(config.Tunnel{
+	err := r.CreateTunnel("prod", config.Tunnel{
 		Name:       "db",
 		Listen:     "127.0.0.1:3306",
 		TargetHost: "10.0.0.10",
@@ -392,7 +414,7 @@ func TestCreateTunnelPersistsAndApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := r.FindTunnel("db"); err != nil {
+	if _, err := r.FindTunnel("prod", "db"); err != nil {
 		t.Fatalf("new tunnel not applied to live registry: %v", err)
 	}
 
@@ -411,7 +433,7 @@ func TestUpdateTunnelPersistsAndApplies(t *testing.T) {
 	listen := "127.0.0.1:2222"
 	targetHost := "ssh.internal"
 	targetPort := 2222
-	err := r.UpdateTunnel("t1", TunnelPatch{
+	err := r.UpdateTunnel("prod", "t1", TunnelPatch{
 		Listen:     &listen,
 		TargetHost: &targetHost,
 		TargetPort: &targetPort,
@@ -420,7 +442,7 @@ func TestUpdateTunnelPersistsAndApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tunnel, err := r.FindTunnel("t1")
+	tunnel, err := r.FindTunnel("prod", "t1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,10 +466,10 @@ func TestUpdateTunnelPersistsAndApplies(t *testing.T) {
 func TestDeleteTunnelPersistsAndApplies(t *testing.T) {
 	r, p := newStoredRegistry(t)
 
-	if err := r.DeleteTunnel("t1"); err != nil {
+	if err := r.DeleteTunnel("prod", "t1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := r.FindTunnel("t1"); err == nil {
+	if _, err := r.FindTunnel("prod", "t1"); err == nil {
 		t.Fatal("deleted tunnel still present in live registry")
 	}
 
@@ -455,9 +477,14 @@ func TestDeleteTunnelPersistsAndApplies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tunnel := range cfg.Client.Tunnels {
-		if tunnel.Name == "t1" {
-			t.Fatal("deleted tunnel still present in client.tunnels")
+	for _, client := range cfg.Client.Clients {
+		if client.Name != "prod" {
+			continue
+		}
+		for _, tunnel := range client.Tunnels {
+			if tunnel.Name == "t1" {
+				t.Fatal("deleted tunnel still present in client.clients[*].tunnels")
+			}
 		}
 	}
 }
@@ -465,11 +492,14 @@ func TestDeleteTunnelPersistsAndApplies(t *testing.T) {
 func TestSetClientCredentialsPersistsAndApplies(t *testing.T) {
 	r, p := newStoredRegistry(t)
 
-	if err := r.SetClientCredentials("rotated-id", "rotated-secret"); err != nil {
+	if err := r.SetClientCredentials("prod", "rotated-id", "rotated-secret"); err != nil {
 		t.Fatal(err)
 	}
 
-	creds := r.ClientCredentials()
+	creds, err := r.ClientCredentials("prod")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if creds.ClientID != "rotated-id" || creds.ClientSecret != "rotated-secret" {
 		t.Fatalf("unexpected credentials after update: %+v", creds)
 	}
@@ -490,7 +520,7 @@ func TestSetConfigValuePersistsAndApplies(t *testing.T) {
 	if err := r.SetConfigValue("app.log_level", "debug"); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.SetConfigValue("client.endpoint.port", "8443"); err != nil {
+	if err := r.SetConfigValue("client.endpoints.0.port", "8443"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -511,7 +541,7 @@ func TestSetConfigValueRollsBackOnInvalidConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = r.SetConfigValue("client.endpoint.port", "70000")
+	err = r.SetConfigValue("client.endpoints.0.port", "70000")
 	if err == nil {
 		t.Fatal("expected invalid config set error")
 	}
@@ -523,7 +553,11 @@ func TestSetConfigValueRollsBackOnInvalidConfig(t *testing.T) {
 	if string(after) != string(before) {
 		t.Fatal("config file was not rolled back after invalid scalar update")
 	}
-	if r.ClientEndpoint().Port != 3005 {
+	ep, err := r.ClientEndpoint("prod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ep.Port != 3005 {
 		t.Fatal("live registry changed after failed config update")
 	}
 }

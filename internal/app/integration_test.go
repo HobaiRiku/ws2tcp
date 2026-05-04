@@ -83,7 +83,7 @@ func roundTrip(t *testing.T, encrypted bool) {
 	}
 	cfg := &config.Config{
 		Server: srvCfg,
-		Client: config.ClientConfig{Enabled: true, ClientID: "u1", ClientSecret: "s1"},
+		Client: config.ClientConfig{Enabled: true},
 		App:    config.AppConfig{HTTPListen: "127.0.0.1:0", HTTPAuth: true, LogLevel: "info"},
 	}
 	reg, err := services.New(cfg)

@@ -31,6 +31,7 @@ func TestConfigShowPathSetAndClientAuth(t *testing.T) {
 	}
 
 	_, err = executeRoot(t, "--home", home, "config", "client-auth", "set",
+		"--client", "prod",
 		"--client-id", "u2",
 		"--client-secret", "s2",
 	)
@@ -42,7 +43,7 @@ func TestConfigShowPathSetAndClientAuth(t *testing.T) {
 	if cfg.App.LogLevel != "debug" {
 		t.Fatalf("unexpected log level: %q", cfg.App.LogLevel)
 	}
-	if cfg.Client.ClientID != "u2" || cfg.Client.ClientSecret != "s2" {
-		t.Fatalf("unexpected client auth: %+v", cfg.Client)
+	if cfg.Client.Clients[0].ClientID != "u2" || cfg.Client.Clients[0].ClientSecret != "s2" {
+		t.Fatalf("unexpected client auth: %+v", cfg.Client.Clients[0])
 	}
 }

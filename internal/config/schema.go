@@ -57,17 +57,17 @@ type ACLRule struct {
 }
 
 // ClientConfig is the ws2tcp-client role (local TCP listener -> WS dial).
-// One client runtime owns one upstream endpoint plus N local tunnels.
+// Endpoints are reusable connection profiles; clients own credentials and
+// tunnels, and each client references one endpoint by name.
 type ClientConfig struct {
-	Enabled      bool     `yaml:"enabled"`
-	ClientID     string   `yaml:"client_id"`
-	ClientSecret string   `yaml:"client_secret"`
-	Endpoint     Endpoint `yaml:"endpoint"`
-	Tunnels      []Tunnel `yaml:"tunnels"`
+	Enabled   bool            `yaml:"enabled"`
+	Endpoints []Endpoint      `yaml:"endpoints"`
+	Clients   []ClientProfile `yaml:"clients"`
 }
 
 // Endpoint describes how to reach a remote ws2tcp-server.
 type Endpoint struct {
+	Name                  string `yaml:"name"`
 	Host                  string `yaml:"host"`
 	IP                    string `yaml:"ip"`
 	Port                  int    `yaml:"port"`
@@ -77,8 +77,18 @@ type Endpoint struct {
 	SSLRejectUnauthorized bool   `yaml:"ssl_reject_unauthorized"`
 }
 
+// ClientProfile is one named ws2tcp client definition. It references a shared
+// endpoint, owns its handshake credentials, and owns its local tunnels.
+type ClientProfile struct {
+	Name         string   `yaml:"name"`
+	Endpoint     string   `yaml:"endpoint"`
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret"`
+	Tunnels      []Tunnel `yaml:"tunnels"`
+}
+
 // Tunnel binds a local listener to a (target_host, target_port) reached via
-// the client's shared upstream endpoint.
+// the owning client's configured endpoint.
 type Tunnel struct {
 	Name       string `yaml:"name"`
 	Listen     string `yaml:"listen"`

@@ -72,46 +72,58 @@ func NewRouter(opts Options) *gin.Engine {
 		c.JSON(http.StatusOK, redactConfig(cfg))
 	})
 
-	api.GET("/client/endpoint", func(c *gin.Context) {
-		c.JSON(http.StatusOK, opts.Registry.ClientEndpoint())
+	clientAPI := api.Group("/client/:name")
+	clientAPI.GET("/endpoint", func(c *gin.Context) {
+		endpoint, err := opts.Registry.ClientEndpoint(c.Param("name"))
+		if err != nil {
+			writeError(c, http.StatusNotFound, "CLIENT_PROFILE_NOT_FOUND", err)
+			return
+		}
+		c.JSON(http.StatusOK, endpoint)
 	})
-	api.PUT("/client/endpoint", func(c *gin.Context) {
+	clientAPI.PUT("/endpoint", func(c *gin.Context) {
 		var endpoint config.Endpoint
 		if err := c.ShouldBindJSON(&endpoint); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
 			return
 		}
-		if err := opts.Registry.SetClientEndpoint(endpoint); err != nil {
+		if err := opts.Registry.SetClientEndpoint(c.Param("name"), endpoint); err != nil {
 			writeError(c, classifyStatus(err), "SET_CLIENT_ENDPOINT_FAILED", err)
 			return
 		}
-		c.JSON(http.StatusOK, endpoint)
+		resolved, _ := opts.Registry.ClientEndpoint(c.Param("name"))
+		c.JSON(http.StatusOK, resolved)
 	})
 
-	api.GET("/client/tunnels", func(c *gin.Context) {
-		c.JSON(http.StatusOK, opts.Registry.Tunnels())
+	clientAPI.GET("/tunnels", func(c *gin.Context) {
+		tunnels, err := opts.Registry.Tunnels(c.Param("name"))
+		if err != nil {
+			writeError(c, http.StatusNotFound, "CLIENT_PROFILE_NOT_FOUND", err)
+			return
+		}
+		c.JSON(http.StatusOK, tunnels)
 	})
-	api.POST("/client/tunnels", func(c *gin.Context) {
+	clientAPI.POST("/tunnels", func(c *gin.Context) {
 		var tunnel config.Tunnel
 		if err := c.ShouldBindJSON(&tunnel); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
 			return
 		}
-		if err := opts.Registry.CreateTunnel(tunnel); err != nil {
+		if err := opts.Registry.CreateTunnel(c.Param("name"), tunnel); err != nil {
 			writeError(c, classifyStatus(err), "CREATE_TUNNEL_FAILED", err)
 			return
 		}
 		c.JSON(http.StatusCreated, tunnel)
 	})
-	api.GET("/client/tunnels/:name", func(c *gin.Context) {
-		tunnel, err := opts.Registry.FindTunnel(c.Param("name"))
+	clientAPI.GET("/tunnels/:tunnel", func(c *gin.Context) {
+		tunnel, err := opts.Registry.FindTunnel(c.Param("name"), c.Param("tunnel"))
 		if err != nil {
 			writeError(c, http.StatusNotFound, "TUNNEL_NOT_FOUND", err)
 			return
 		}
 		c.JSON(http.StatusOK, tunnel)
 	})
-	api.PATCH("/client/tunnels/:name", func(c *gin.Context) {
+	clientAPI.PATCH("/tunnels/:tunnel", func(c *gin.Context) {
 		var req tunnelPatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -126,15 +138,15 @@ func NewRouter(opts Options) *gin.Engine {
 			writeError(c, http.StatusBadRequest, "EMPTY_PATCH", errors.New("no tunnel fields provided"))
 			return
 		}
-		if err := opts.Registry.UpdateTunnel(c.Param("name"), patch); err != nil {
+		if err := opts.Registry.UpdateTunnel(c.Param("name"), c.Param("tunnel"), patch); err != nil {
 			writeError(c, classifyStatus(err), "UPDATE_TUNNEL_FAILED", err)
 			return
 		}
-		tunnel, _ := opts.Registry.FindTunnel(c.Param("name"))
+		tunnel, _ := opts.Registry.FindTunnel(c.Param("name"), c.Param("tunnel"))
 		c.JSON(http.StatusOK, tunnel)
 	})
-	api.DELETE("/client/tunnels/:name", func(c *gin.Context) {
-		if err := opts.Registry.DeleteTunnel(c.Param("name")); err != nil {
+	clientAPI.DELETE("/tunnels/:tunnel", func(c *gin.Context) {
+		if err := opts.Registry.DeleteTunnel(c.Param("name"), c.Param("tunnel")); err != nil {
 			writeError(c, classifyStatus(err), "DELETE_TUNNEL_FAILED", err)
 			return
 		}
@@ -221,14 +233,22 @@ func redactConfig(cfg *config.Config) *config.Config {
 	cp.Server = cfg.Server
 	cp.Client = cfg.Client
 	cp.Server.AESKey = ""
-	cp.Client.ClientSecret = ""
-	cp.Client.Endpoint.AESKey = ""
 	cp.Server.Clients = make([]config.ClientIdentity, len(cfg.Server.Clients))
 	for i, client := range cfg.Server.Clients {
 		cp.Server.Clients[i] = client
 		cp.Server.Clients[i].Secret = ""
 	}
-	cp.Client.Tunnels = append([]config.Tunnel(nil), cfg.Client.Tunnels...)
+	cp.Client.Endpoints = make([]config.Endpoint, len(cfg.Client.Endpoints))
+	for i, endpoint := range cfg.Client.Endpoints {
+		cp.Client.Endpoints[i] = endpoint
+		cp.Client.Endpoints[i].AESKey = ""
+	}
+	cp.Client.Clients = make([]config.ClientProfile, len(cfg.Client.Clients))
+	for i, client := range cfg.Client.Clients {
+		cp.Client.Clients[i] = client
+		cp.Client.Clients[i].ClientSecret = ""
+		cp.Client.Clients[i].Tunnels = append([]config.Tunnel(nil), client.Tunnels...)
+	}
 	return &cp
 }
 
