@@ -13,10 +13,67 @@ import (
 	"websocket2Tcp/internal/app"
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/paths"
+	"websocket2Tcp/internal/services"
 )
 
 func TestRunServesManagementAPI(t *testing.T) {
 	p, cfg := writeAppConfig(t, "127.0.0.1:0", true)
+	auth := services.NewAuthService(p.Tokens(), p.FileMode())
+	token, _, err := auth.IssueToken("cli", []string{services.TokenScopeRead})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.App.HTTPListen = ln.Addr().String()
+	ln.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- app.Run(ctx, app.Options{
+			Paths:  p,
+			Config: cfg,
+			Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		})
+	}()
+
+	if err := waitHTTP("http://"+cfg.App.HTTPListen+"/api/health", 3*time.Second); err != nil {
+		t.Fatal(err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, "http://"+cfg.App.HTTPListen+"/api/config/path", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected api status: %d", resp.StatusCode)
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("app.Run returned error: %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for app.Run to exit")
+	}
+}
+
+func TestRunAllowsLoopbackWithoutAuth(t *testing.T) {
+	p, cfg := writeAppConfig(t, "127.0.0.1:0", false)
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -45,7 +102,7 @@ func TestRunServesManagementAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("unexpected api status: %d", resp.StatusCode)
 	}
@@ -58,19 +115,6 @@ func TestRunServesManagementAPI(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for app.Run to exit")
-	}
-}
-
-func TestRunRejectsNonLoopbackAuthWithoutMiddleware(t *testing.T) {
-	p, cfg := writeAppConfig(t, "0.0.0.0:7321", true)
-
-	err := app.Run(context.Background(), app.Options{
-		Paths:  p,
-		Config: cfg,
-		Logger: slog.New(slog.NewTextHandler(io.Discard, nil)),
-	})
-	if err == nil || err.Error() != "management api auth for non-loopback binds is not implemented yet" {
-		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

@@ -7,17 +7,17 @@
 3. Server CLI (`clients list|add|update|rm`, `acl set`)
 4. Core config CLI (`show`, `path`, `set`, `client-auth set`)
 5. Base management REST router in `internal/api`
-6. Management API wired into `internal/app` with loopback-only interim auth guard
+6. Management API wired into `internal/app`
 7. Client model refactored to named `endpoints[]` plus named `clients[]`, with each client owning its own credentials and tunnels
+8. Finished `api-rest`
+   - added persisted argon2id token auth + scope-aware middleware
+   - added token CRUD, runtime stats, client inventory, and config replace endpoints
 
 ## Left to do
 
-1. Finish `api-rest`
-   - implement token auth middleware and token-backed authorization
-   - add any remaining REST endpoints needed by runtime/UI
-2. `api-events`
+1. `api-events`
    - management-plane SSE / WebSocket event stream
-3. `web-embed`
+2. `web-embed`
    - embed SPA assets and add SPA fallback handler
-4. `tests-interop`
+3. `tests-interop`
    - Go↔Node interop fixtures after legacy payload capture is available

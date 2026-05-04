@@ -2,10 +2,13 @@ package services
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"websocket2Tcp/internal/config"
 )
 
 // ConfigPath returns the on-disk config file path backing the registry.
@@ -105,4 +108,37 @@ func parseScalarValue(existing *yaml.Node, raw string) (string, string, error) {
 	default:
 		return "!!str", raw, nil
 	}
+}
+
+// ReplaceConfig overwrites the backing config file with a new full document,
+// validates it through the normal load path, then swaps the runtime snapshot.
+func (r *Registry) ReplaceConfig(next *config.Config) error {
+	if r.configPath == "" {
+		return fmt.Errorf("registry is not backed by a config file")
+	}
+	raw, err := yaml.Marshal(next)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	r.storeMu.Lock()
+	defer r.storeMu.Unlock()
+
+	backup, err := os.ReadFile(r.configPath)
+	if err != nil {
+		return fmt.Errorf("read config backup: %w", err)
+	}
+	if err := config.WriteAtomic(r.configPath, raw, r.fileMode); err != nil {
+		return err
+	}
+	loaded, err := config.Load(r.configPath)
+	if err != nil {
+		_ = config.WriteAtomic(r.configPath, backup, r.fileMode)
+		return err
+	}
+	if err := r.Apply(loaded); err != nil {
+		_ = config.WriteAtomic(r.configPath, backup, r.fileMode)
+		return err
+	}
+	return nil
 }

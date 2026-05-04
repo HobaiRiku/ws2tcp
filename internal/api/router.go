@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,10 +18,11 @@ import (
 // Options carries the dependencies needed to build the management router.
 // Auth middleware can be injected later; if Protect is nil, routes are open.
 type Options struct {
-	Registry *services.Registry
-	Runtime  *services.Runtime
-	Logger   *slog.Logger
-	Protect  gin.HandlerFunc
+	Registry    *services.Registry
+	Runtime     *services.Runtime
+	Auth        *services.AuthService
+	RequireAuth bool
+	Logger      *slog.Logger
 }
 
 type errorResponse struct {
@@ -36,6 +39,23 @@ type tunnelPatchRequest struct {
 type clientPatchRequest struct {
 	Secret *string           `json:"secret"`
 	ACL    *[]config.ACLRule `json:"acl"`
+}
+
+type tokenCreateRequest struct {
+	Name   string   `json:"name"`
+	Scopes []string `json:"scopes"`
+}
+
+type tokenCreateResponse struct {
+	services.TokenInfo
+	Token string `json:"token"`
+}
+
+type serverStatsResponse struct {
+	BytesIn           uint64           `json:"bytes_in"`
+	BytesOut          uint64           `json:"bytes_out"`
+	UptimeSeconds     int64            `json:"uptime_seconds"`
+	ClientConnections map[string]int32 `json:"client_connections"`
 }
 
 // NewRouter builds the base management REST API.
@@ -56,14 +76,15 @@ func NewRouter(opts Options) *gin.Engine {
 	})
 
 	api := router.Group("/api")
-	if opts.Protect != nil {
-		api.Use(opts.Protect)
-	}
+	readOnly := authorize(opts, services.TokenScopeRead)
+	clientWrite := authorize(opts, services.TokenScopeClientWrite)
+	serverWrite := authorize(opts, services.TokenScopeServerWrite)
+	adminOnly := authorize(opts, services.TokenScopeAdmin)
 
-	api.GET("/config/path", func(c *gin.Context) {
+	api.GET("/config/path", readOnly, func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"path": opts.Registry.ConfigPath()})
 	})
-	api.GET("/config", func(c *gin.Context) {
+	api.GET("/config", readOnly, func(c *gin.Context) {
 		cfg, err := config.Load(opts.Registry.ConfigPath())
 		if err != nil {
 			writeError(c, http.StatusInternalServerError, "CONFIG_LOAD_FAILED", err)
@@ -71,17 +92,57 @@ func NewRouter(opts Options) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, redactConfig(cfg))
 	})
+	api.PUT("/config", adminOnly, func(c *gin.Context) {
+		var cfg config.Config
+		if err := c.ShouldBindJSON(&cfg); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		if err := opts.Registry.ReplaceConfig(&cfg); err != nil {
+			writeError(c, classifyStatus(err), "REPLACE_CONFIG_FAILED", err)
+			return
+		}
+		loaded, err := config.Load(opts.Registry.ConfigPath())
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "CONFIG_LOAD_FAILED", err)
+			return
+		}
+		c.JSON(http.StatusOK, redactConfig(loaded))
+	})
+
+	api.GET("/client/endpoints", readOnly, func(c *gin.Context) {
+		c.JSON(http.StatusOK, redactEndpoints(opts.Registry.Endpoints()))
+	})
+	api.GET("/client/endpoints/:endpoint", readOnly, func(c *gin.Context) {
+		endpoint, err := opts.Registry.FindEndpoint(c.Param("endpoint"))
+		if err != nil {
+			writeError(c, http.StatusNotFound, "ENDPOINT_NOT_FOUND", err)
+			return
+		}
+		c.JSON(http.StatusOK, redactEndpoint(endpoint))
+	})
+	api.GET("/client/profiles", readOnly, func(c *gin.Context) {
+		c.JSON(http.StatusOK, redactClientProfiles(opts.Registry.ClientProfiles()))
+	})
+	api.GET("/client/profiles/:name", readOnly, func(c *gin.Context) {
+		profile, err := opts.Registry.FindClientProfile(c.Param("name"))
+		if err != nil {
+			writeError(c, http.StatusNotFound, "CLIENT_PROFILE_NOT_FOUND", err)
+			return
+		}
+		c.JSON(http.StatusOK, redactClientProfile(profile))
+	})
 
 	clientAPI := api.Group("/client/:name")
-	clientAPI.GET("/endpoint", func(c *gin.Context) {
+	clientAPI.GET("/endpoint", readOnly, func(c *gin.Context) {
 		endpoint, err := opts.Registry.ClientEndpoint(c.Param("name"))
 		if err != nil {
 			writeError(c, http.StatusNotFound, "CLIENT_PROFILE_NOT_FOUND", err)
 			return
 		}
-		c.JSON(http.StatusOK, endpoint)
+		c.JSON(http.StatusOK, redactEndpoint(endpoint))
 	})
-	clientAPI.PUT("/endpoint", func(c *gin.Context) {
+	clientAPI.PUT("/endpoint", clientWrite, func(c *gin.Context) {
 		var endpoint config.Endpoint
 		if err := c.ShouldBindJSON(&endpoint); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -92,10 +153,10 @@ func NewRouter(opts Options) *gin.Engine {
 			return
 		}
 		resolved, _ := opts.Registry.ClientEndpoint(c.Param("name"))
-		c.JSON(http.StatusOK, resolved)
+		c.JSON(http.StatusOK, redactEndpoint(resolved))
 	})
 
-	clientAPI.GET("/tunnels", func(c *gin.Context) {
+	clientAPI.GET("/tunnels", readOnly, func(c *gin.Context) {
 		tunnels, err := opts.Registry.Tunnels(c.Param("name"))
 		if err != nil {
 			writeError(c, http.StatusNotFound, "CLIENT_PROFILE_NOT_FOUND", err)
@@ -103,7 +164,7 @@ func NewRouter(opts Options) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, tunnels)
 	})
-	clientAPI.POST("/tunnels", func(c *gin.Context) {
+	clientAPI.POST("/tunnels", clientWrite, func(c *gin.Context) {
 		var tunnel config.Tunnel
 		if err := c.ShouldBindJSON(&tunnel); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -115,7 +176,7 @@ func NewRouter(opts Options) *gin.Engine {
 		}
 		c.JSON(http.StatusCreated, tunnel)
 	})
-	clientAPI.GET("/tunnels/:tunnel", func(c *gin.Context) {
+	clientAPI.GET("/tunnels/:tunnel", readOnly, func(c *gin.Context) {
 		tunnel, err := opts.Registry.FindTunnel(c.Param("name"), c.Param("tunnel"))
 		if err != nil {
 			writeError(c, http.StatusNotFound, "TUNNEL_NOT_FOUND", err)
@@ -123,7 +184,7 @@ func NewRouter(opts Options) *gin.Engine {
 		}
 		c.JSON(http.StatusOK, tunnel)
 	})
-	clientAPI.PATCH("/tunnels/:tunnel", func(c *gin.Context) {
+	clientAPI.PATCH("/tunnels/:tunnel", clientWrite, func(c *gin.Context) {
 		var req tunnelPatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -145,7 +206,7 @@ func NewRouter(opts Options) *gin.Engine {
 		tunnel, _ := opts.Registry.FindTunnel(c.Param("name"), c.Param("tunnel"))
 		c.JSON(http.StatusOK, tunnel)
 	})
-	clientAPI.DELETE("/tunnels/:tunnel", func(c *gin.Context) {
+	clientAPI.DELETE("/tunnels/:tunnel", clientWrite, func(c *gin.Context) {
 		if err := opts.Registry.DeleteTunnel(c.Param("name"), c.Param("tunnel")); err != nil {
 			writeError(c, classifyStatus(err), "DELETE_TUNNEL_FAILED", err)
 			return
@@ -153,10 +214,10 @@ func NewRouter(opts Options) *gin.Engine {
 		c.Status(http.StatusNoContent)
 	})
 
-	api.GET("/server/clients", func(c *gin.Context) {
-		c.JSON(http.StatusOK, opts.Registry.Identities())
+	api.GET("/server/clients", readOnly, func(c *gin.Context) {
+		c.JSON(http.StatusOK, redactIdentities(opts.Registry.Identities()))
 	})
-	api.POST("/server/clients", func(c *gin.Context) {
+	api.POST("/server/clients", serverWrite, func(c *gin.Context) {
 		var client config.ClientIdentity
 		if err := c.ShouldBindJSON(&client); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -166,17 +227,17 @@ func NewRouter(opts Options) *gin.Engine {
 			writeError(c, classifyStatus(err), "CREATE_CLIENT_FAILED", err)
 			return
 		}
-		c.JSON(http.StatusCreated, client)
+		c.JSON(http.StatusCreated, redactIdentity(services.Identity{ID: client.ID}))
 	})
-	api.GET("/server/clients/:id", func(c *gin.Context) {
+	api.GET("/server/clients/:id", readOnly, func(c *gin.Context) {
 		client, err := opts.Registry.FindIdentity(c.Param("id"))
 		if err != nil {
 			writeError(c, http.StatusNotFound, "CLIENT_NOT_FOUND", err)
 			return
 		}
-		c.JSON(http.StatusOK, client)
+		c.JSON(http.StatusOK, redactIdentity(client))
 	})
-	api.PATCH("/server/clients/:id", func(c *gin.Context) {
+	api.PATCH("/server/clients/:id", serverWrite, func(c *gin.Context) {
 		var req clientPatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -195,16 +256,16 @@ func NewRouter(opts Options) *gin.Engine {
 			return
 		}
 		client, _ := opts.Registry.FindIdentity(c.Param("id"))
-		c.JSON(http.StatusOK, client)
+		c.JSON(http.StatusOK, redactIdentity(client))
 	})
-	api.DELETE("/server/clients/:id", func(c *gin.Context) {
+	api.DELETE("/server/clients/:id", serverWrite, func(c *gin.Context) {
 		if err := opts.Registry.DeleteClient(c.Param("id")); err != nil {
 			writeError(c, classifyStatus(err), "DELETE_CLIENT_FAILED", err)
 			return
 		}
 		c.Status(http.StatusNoContent)
 	})
-	api.PUT("/server/clients/:id/acl", func(c *gin.Context) {
+	api.PUT("/server/clients/:id/acl", serverWrite, func(c *gin.Context) {
 		var rules []config.ACLRule
 		if err := c.ShouldBindJSON(&rules); err != nil {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
@@ -215,7 +276,46 @@ func NewRouter(opts Options) *gin.Engine {
 			return
 		}
 		client, _ := opts.Registry.FindIdentity(c.Param("id"))
-		c.JSON(http.StatusOK, client)
+		c.JSON(http.StatusOK, redactIdentity(client))
+	})
+
+	api.GET("/server/stats", readOnly, func(c *gin.Context) {
+		bytesIn, bytesOut := opts.Runtime.Totals()
+		c.JSON(http.StatusOK, serverStatsResponse{
+			BytesIn:           bytesIn,
+			BytesOut:          bytesOut,
+			UptimeSeconds:     int64(services.Uptime() / time.Second),
+			ClientConnections: opts.Runtime.ClientConnections(),
+		})
+	})
+
+	api.GET("/auth/tokens", adminOnly, func(c *gin.Context) {
+		tokens, err := opts.Auth.ListTokens()
+		if err != nil {
+			writeError(c, http.StatusInternalServerError, "LIST_TOKENS_FAILED", err)
+			return
+		}
+		c.JSON(http.StatusOK, tokens)
+	})
+	api.POST("/auth/tokens", adminOnly, func(c *gin.Context) {
+		var req tokenCreateRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
+			return
+		}
+		token, info, err := opts.Auth.IssueToken(req.Name, req.Scopes)
+		if err != nil {
+			writeError(c, classifyStatus(err), "ISSUE_TOKEN_FAILED", err)
+			return
+		}
+		c.JSON(http.StatusCreated, tokenCreateResponse{TokenInfo: info, Token: token})
+	})
+	api.DELETE("/auth/tokens/:name", adminOnly, func(c *gin.Context) {
+		if err := opts.Auth.RevokeToken(c.Param("name")); err != nil {
+			writeError(c, classifyStatus(err), "REVOKE_TOKEN_FAILED", err)
+			return
+		}
+		c.Status(http.StatusNoContent)
 	})
 
 	return router
@@ -252,9 +352,81 @@ func redactConfig(cfg *config.Config) *config.Config {
 	return &cp
 }
 
+func redactEndpoint(endpoint config.Endpoint) config.Endpoint {
+	cp := endpoint
+	cp.AESKey = ""
+	return cp
+}
+
+func redactEndpoints(endpoints []config.Endpoint) []config.Endpoint {
+	out := make([]config.Endpoint, len(endpoints))
+	for i, endpoint := range endpoints {
+		out[i] = redactEndpoint(endpoint)
+	}
+	return out
+}
+
+func redactClientProfile(profile config.ClientProfile) config.ClientProfile {
+	cp := profile
+	cp.ClientSecret = ""
+	cp.Tunnels = append([]config.Tunnel(nil), profile.Tunnels...)
+	return cp
+}
+
+func redactClientProfiles(profiles []config.ClientProfile) []config.ClientProfile {
+	out := make([]config.ClientProfile, len(profiles))
+	for i, profile := range profiles {
+		out[i] = redactClientProfile(profile)
+	}
+	return out
+}
+
+func redactIdentity(identity services.Identity) gin.H {
+	return gin.H{
+		"id":  identity.ID,
+		"acl": identityACL(identity),
+	}
+}
+
+func redactIdentities(identities []services.Identity) []gin.H {
+	out := make([]gin.H, len(identities))
+	for i, identity := range identities {
+		out[i] = redactIdentity(identity)
+	}
+	return out
+}
+
+func identityACL(identity services.Identity) []gin.H {
+	out := make([]gin.H, len(identity.ACL))
+	for i, rule := range identity.ACL {
+		ports := make([]string, len(rule.Ports))
+		for j, port := range rule.Ports {
+			if port.Lo == port.Hi {
+				ports[j] = strconv.Itoa(int(port.Lo))
+				continue
+			}
+			ports[j] = strconv.Itoa(int(port.Lo)) + "-" + strconv.Itoa(int(port.Hi))
+		}
+		out[i] = gin.H{
+			"cidr":  rule.CIDR.String(),
+			"ports": ports,
+		}
+	}
+	return out
+}
+
 func classifyStatus(err error) int {
 	if err == nil {
 		return http.StatusOK
+	}
+	if errors.Is(err, services.ErrTokenUnauthorized) {
+		return http.StatusUnauthorized
+	}
+	if errors.Is(err, services.ErrTokenForbidden) {
+		return http.StatusForbidden
+	}
+	if errors.Is(err, services.ErrTokenNotFound) {
+		return http.StatusNotFound
 	}
 	var missing *config.MissingFileError
 	if errors.As(err, &missing) {
@@ -278,4 +450,39 @@ func writeError(c *gin.Context, status int, code string, err error) {
 		Code:    code,
 		Message: err.Error(),
 	})
+}
+
+func authorize(opts Options, scopes ...string) gin.HandlerFunc {
+	if !opts.RequireAuth {
+		return func(c *gin.Context) { c.Next() }
+	}
+	return func(c *gin.Context) {
+		if opts.Auth == nil {
+			writeError(c, http.StatusInternalServerError, "AUTH_NOT_CONFIGURED", errors.New("auth service not configured"))
+			c.Abort()
+			return
+		}
+		token := bearerToken(c.GetHeader("Authorization"))
+		if token == "" {
+			token = c.Query("token")
+		}
+		_, err := opts.Auth.VerifyToken(token, scopes...)
+		if err != nil {
+			writeError(c, classifyStatus(err), "AUTH_FAILED", err)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+func bearerToken(header string) string {
+	if header == "" {
+		return ""
+	}
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }

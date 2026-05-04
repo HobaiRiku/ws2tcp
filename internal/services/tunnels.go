@@ -2,6 +2,7 @@ package services
 
 import (
 	"fmt"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 
@@ -15,6 +16,9 @@ func (r *Registry) Endpoints() []config.Endpoint {
 	for _, ep := range s.endpoints {
 		out = append(out, ep)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name < out[j].Name
+	})
 	return out
 }
 

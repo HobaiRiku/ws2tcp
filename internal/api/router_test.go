@@ -20,36 +20,85 @@ import (
 const testAESKey = "njpjvjkgfykgpqpcksvjydvlctgznlnz"
 
 func TestHealthVersionAndConfigEndpoints(t *testing.T) {
-	router, p := newTestRouter(t)
+	router, p, auth := newTestRouter(t, true)
+	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
 
-	rr := performJSON(t, router, http.MethodGet, "/api/health", nil)
+	rr := performJSON(t, router, http.MethodGet, "/api/health", "", nil)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"ok":true`) {
 		t.Fatalf("unexpected health response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodGet, "/api/version", nil)
+	rr = performJSON(t, router, http.MethodGet, "/api/version", "", nil)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"version"`) {
 		t.Fatalf("unexpected version response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodGet, "/api/config/path", nil)
+	rr = performJSON(t, router, http.MethodGet, "/api/config/path", "", nil)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized config path response, got: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodGet, "/api/config/path", readToken, nil)
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), p.Config()) {
 		t.Fatalf("unexpected config path response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodGet, "/api/config", nil)
+	rr = performJSON(t, router, http.MethodGet, "/api/config", readToken, nil)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("unexpected config response: %d %s", rr.Code, rr.Body.String())
 	}
-	if strings.Contains(rr.Body.String(), `"client_secret":"s1"`) || strings.Contains(rr.Body.String(), `"aes_key":"`+testAESKey+`"`) {
-		t.Fatalf("config secrets were not redacted: %s", rr.Body.String())
+	for _, secret := range []string{`"client_secret":"s1"`, `"secret":"s1"`, `"aes_key":"` + testAESKey + `"`} {
+		if strings.Contains(rr.Body.String(), secret) {
+			t.Fatalf("config secrets were not redacted: %s", rr.Body.String())
+		}
+	}
+}
+
+func TestAuthScopesAndTokenEndpoints(t *testing.T) {
+	router, _, auth := newTestRouter(t, true)
+	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
+	adminToken := issueToken(t, auth, "admin", []string{services.TokenScopeAdmin})
+
+	rr := performJSON(t, router, http.MethodPost, "/api/server/clients", readToken, config.ClientIdentity{
+		ID:     "u2",
+		Secret: "s2",
+	})
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("expected read token to be forbidden, got: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodPost, "/api/auth/tokens", adminToken, tokenCreateRequest{
+		Name:   "dash",
+		Scopes: []string{services.TokenScopeRead},
+	})
+	if rr.Code != http.StatusCreated || !strings.Contains(rr.Body.String(), `"token":"`) {
+		t.Fatalf("unexpected token creation response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodGet, "/api/auth/tokens", adminToken, nil)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"dash"`) {
+		t.Fatalf("unexpected token list response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodDelete, "/api/auth/tokens/dash", adminToken, nil)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("unexpected token delete response: %d %s", rr.Code, rr.Body.String())
 	}
 }
 
 func TestClientEndpoints(t *testing.T) {
-	router, p := newTestRouter(t)
+	router, p, auth := newTestRouter(t, true)
+	clientToken := issueToken(t, auth, "client-writer", []string{services.TokenScopeClientWrite})
 
-	rr := performJSON(t, router, http.MethodPut, "/api/client/prod/endpoint", config.Endpoint{
+	rr := performJSON(t, router, http.MethodGet, "/api/client/endpoints", clientToken, nil)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"edge"`) {
+		t.Fatalf("unexpected endpoint inventory response: %d %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), `"aes_key":"`+testAESKey+`"`) {
+		t.Fatalf("endpoint aes key leaked: %s", rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodPut, "/api/client/prod/endpoint", clientToken, config.Endpoint{
 		Host:                  "api.example.com",
 		IP:                    "198.51.100.20",
 		Port:                  8443,
@@ -62,7 +111,7 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("unexpected endpoint put response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodPost, "/api/client/prod/tunnels", config.Tunnel{
+	rr = performJSON(t, router, http.MethodPost, "/api/client/prod/tunnels", clientToken, config.Tunnel{
 		Name:       "db",
 		Listen:     "127.0.0.1:3306",
 		TargetHost: "10.0.0.10",
@@ -72,7 +121,7 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("unexpected tunnel post response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodPatch, "/api/client/prod/tunnels/db", tunnelPatchRequest{
+	rr = performJSON(t, router, http.MethodPatch, "/api/client/prod/tunnels/db", clientToken, tunnelPatchRequest{
 		Listen:     ptr("127.0.0.1:13306"),
 		TargetHost: ptr("db.internal"),
 		TargetPort: intPtr(3307),
@@ -81,9 +130,17 @@ func TestClientEndpoints(t *testing.T) {
 		t.Fatalf("unexpected tunnel patch response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodDelete, "/api/client/prod/tunnels/t1", nil)
+	rr = performJSON(t, router, http.MethodDelete, "/api/client/prod/tunnels/t1", clientToken, nil)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("unexpected tunnel delete response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodGet, "/api/client/profiles/prod", clientToken, nil)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"prod"`) {
+		t.Fatalf("unexpected profile response: %d %s", rr.Code, rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), `"client_secret":"s1"`) {
+		t.Fatalf("client secret leaked: %s", rr.Body.String())
 	}
 
 	cfg, err := config.Load(p.Config())
@@ -98,10 +155,12 @@ func TestClientEndpoints(t *testing.T) {
 	}
 }
 
-func TestServerClientEndpoints(t *testing.T) {
-	router, p := newTestRouter(t)
+func TestServerClientEndpointsAndStats(t *testing.T) {
+	router, p, auth := newTestRouter(t, true)
+	serverToken := issueToken(t, auth, "server-writer", []string{services.TokenScopeServerWrite})
+	readToken := issueToken(t, auth, "reader", []string{services.TokenScopeRead})
 
-	rr := performJSON(t, router, http.MethodPost, "/api/server/clients", config.ClientIdentity{
+	rr := performJSON(t, router, http.MethodPost, "/api/server/clients", serverToken, config.ClientIdentity{
 		ID:     "u2",
 		Secret: "s2",
 		ACL: []config.ACLRule{
@@ -111,22 +170,30 @@ func TestServerClientEndpoints(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("unexpected client post response: %d %s", rr.Code, rr.Body.String())
 	}
+	if strings.Contains(rr.Body.String(), `"secret":"`) {
+		t.Fatalf("server secret leaked: %s", rr.Body.String())
+	}
 
-	rr = performJSON(t, router, http.MethodPatch, "/api/server/clients/u2", clientPatchRequest{
+	rr = performJSON(t, router, http.MethodPatch, "/api/server/clients/u2", serverToken, clientPatchRequest{
 		Secret: ptr("rotated"),
 	})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("unexpected client patch response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodPut, "/api/server/clients/u2/acl", []config.ACLRule{
+	rr = performJSON(t, router, http.MethodPut, "/api/server/clients/u2/acl", serverToken, []config.ACLRule{
 		{CIDR: "192.168.1.0/24", Ports: []string{"22", "80"}},
 	})
 	if rr.Code != http.StatusOK {
 		t.Fatalf("unexpected acl put response: %d %s", rr.Code, rr.Body.String())
 	}
 
-	rr = performJSON(t, router, http.MethodDelete, "/api/server/clients/u1", nil)
+	rr = performJSON(t, router, http.MethodGet, "/api/server/stats", readToken, nil)
+	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"uptime_seconds":`) {
+		t.Fatalf("unexpected stats response: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodDelete, "/api/server/clients/u1", serverToken, nil)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("unexpected client delete response: %d %s", rr.Code, rr.Body.String())
 	}
@@ -140,7 +207,16 @@ func TestServerClientEndpoints(t *testing.T) {
 	}
 }
 
-func newTestRouter(t *testing.T) (*gin.Engine, paths.Paths) {
+func TestLoopbackCanSkipAuth(t *testing.T) {
+	router, _, _ := newTestRouter(t, false)
+
+	rr := performJSON(t, router, http.MethodGet, "/api/config/path", "", nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected open loopback route, got: %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func newTestRouter(t *testing.T, requireAuth bool) (*gin.Engine, paths.Paths, *services.AuthService) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -196,14 +272,17 @@ client:
 	if err != nil {
 		t.Fatal(err)
 	}
+	auth := services.NewAuthService(p.Tokens(), p.FileMode())
 
 	return NewRouter(Options{
-		Registry: reg,
-		Runtime:  services.NewRuntime(),
-	}), p
+		Registry:    reg,
+		Runtime:     services.NewRuntime(),
+		Auth:        auth,
+		RequireAuth: requireAuth,
+	}), p, auth
 }
 
-func performJSON(t *testing.T, handler http.Handler, method, path string, body any) *httptest.ResponseRecorder {
+func performJSON(t *testing.T, handler http.Handler, method, path, token string, body any) *httptest.ResponseRecorder {
 	t.Helper()
 
 	var reqBody *bytes.Reader
@@ -221,9 +300,21 @@ func performJSON(t *testing.T, handler http.Handler, method, path string, body a
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	return rr
+}
+
+func issueToken(t *testing.T, auth *services.AuthService, name string, scopes []string) string {
+	t.Helper()
+	token, _, err := auth.IssueToken(name, scopes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token
 }
 
 func ptr(s string) *string { return &s }

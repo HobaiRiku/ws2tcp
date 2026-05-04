@@ -8,90 +8,90 @@ package config
 
 // Config is the root document of config.yaml.
 type Config struct {
-	App    AppConfig    `yaml:"app"`
-	Server ServerConfig `yaml:"server"`
-	Client ClientConfig `yaml:"client"`
+	App    AppConfig    `yaml:"app" json:"app"`
+	Server ServerConfig `yaml:"server" json:"server"`
+	Client ClientConfig `yaml:"client" json:"client"`
 }
 
 // AppConfig covers the management plane (HTTP API + Web UI) and shared
 // process settings such as log level.
 type AppConfig struct {
-	HTTPListen string `yaml:"http_listen"`
-	HTTPAuth   bool   `yaml:"http_auth"`
-	LogLevel   string `yaml:"log_level"`
+	HTTPListen string `yaml:"http_listen" json:"http_listen"`
+	HTTPAuth   bool   `yaml:"http_auth" json:"http_auth"`
+	LogLevel   string `yaml:"log_level" json:"log_level"`
 }
 
 // ServerConfig is the ws2tcp-server role (terminate WS, dial target TCP).
 type ServerConfig struct {
-	Enabled       bool             `yaml:"enabled"`
-	Listen        string           `yaml:"listen"`
-	WSPath        string           `yaml:"ws_path"`
-	WSHost        string           `yaml:"ws_host"`
-	TrustProxy    bool             `yaml:"trust_proxy"`
-	AESKey        string           `yaml:"aes_key"`
-	UseEncryption bool             `yaml:"use_encryption"`
-	TLS           TLSConfig        `yaml:"tls"`
-	Clients       []ClientIdentity `yaml:"clients"`
+	Enabled       bool             `yaml:"enabled" json:"enabled"`
+	Listen        string           `yaml:"listen" json:"listen"`
+	WSPath        string           `yaml:"ws_path" json:"ws_path"`
+	WSHost        string           `yaml:"ws_host" json:"ws_host"`
+	TrustProxy    bool             `yaml:"trust_proxy" json:"trust_proxy"`
+	AESKey        string           `yaml:"aes_key" json:"aes_key"`
+	UseEncryption bool             `yaml:"use_encryption" json:"use_encryption"`
+	TLS           TLSConfig        `yaml:"tls" json:"tls"`
+	Clients       []ClientIdentity `yaml:"clients" json:"clients"`
 }
 
 // TLSConfig switches on native wss; cert/key paths are resolved relative
 // to WS2TCP_HOME.
 type TLSConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Cert    string `yaml:"cert"`
-	Key     string `yaml:"key"`
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Cert    string `yaml:"cert" json:"cert"`
+	Key     string `yaml:"key" json:"key"`
 }
 
 // ClientIdentity is one server-side credential record (a "user").
 type ClientIdentity struct {
-	ID     string    `yaml:"id"`
-	Secret string    `yaml:"secret"`
-	ACL    []ACLRule `yaml:"acl"`
+	ID     string    `yaml:"id" json:"id"`
+	Secret string    `yaml:"secret" json:"secret"`
+	ACL    []ACLRule `yaml:"acl" json:"acl"`
 }
 
 // ACLRule grants access from a CIDR to a list of port specs.
 // A port spec is either "22" or "8000-8999"; parse with ParsePortRange.
 type ACLRule struct {
-	CIDR  string   `yaml:"cidr"`
-	Ports []string `yaml:"ports"`
+	CIDR  string   `yaml:"cidr" json:"cidr"`
+	Ports []string `yaml:"ports" json:"ports"`
 }
 
 // ClientConfig is the ws2tcp-client role (local TCP listener -> WS dial).
 // Endpoints are reusable connection profiles; clients own credentials and
 // tunnels, and each client references one endpoint by name.
 type ClientConfig struct {
-	Enabled   bool            `yaml:"enabled"`
-	Endpoints []Endpoint      `yaml:"endpoints"`
-	Clients   []ClientProfile `yaml:"clients"`
+	Enabled   bool            `yaml:"enabled" json:"enabled"`
+	Endpoints []Endpoint      `yaml:"endpoints" json:"endpoints"`
+	Clients   []ClientProfile `yaml:"clients" json:"clients"`
 }
 
 // Endpoint describes how to reach a remote ws2tcp-server.
 type Endpoint struct {
-	Name                  string `yaml:"name"`
-	Host                  string `yaml:"host"`
-	IP                    string `yaml:"ip"`
-	Port                  int    `yaml:"port"`
-	Path                  string `yaml:"path"`
-	WSS                   bool   `yaml:"wss"`
-	AESKey                string `yaml:"aes_key"`
-	SSLRejectUnauthorized bool   `yaml:"ssl_reject_unauthorized"`
+	Name                  string `yaml:"name" json:"name"`
+	Host                  string `yaml:"host" json:"host"`
+	IP                    string `yaml:"ip" json:"ip"`
+	Port                  int    `yaml:"port" json:"port"`
+	Path                  string `yaml:"path" json:"path"`
+	WSS                   bool   `yaml:"wss" json:"wss"`
+	AESKey                string `yaml:"aes_key" json:"aes_key"`
+	SSLRejectUnauthorized bool   `yaml:"ssl_reject_unauthorized" json:"ssl_reject_unauthorized"`
 }
 
 // ClientProfile is one named ws2tcp client definition. It references a shared
 // endpoint, owns its handshake credentials, and owns its local tunnels.
 type ClientProfile struct {
-	Name         string   `yaml:"name"`
-	Endpoint     string   `yaml:"endpoint"`
-	ClientID     string   `yaml:"client_id"`
-	ClientSecret string   `yaml:"client_secret"`
-	Tunnels      []Tunnel `yaml:"tunnels"`
+	Name         string   `yaml:"name" json:"name"`
+	Endpoint     string   `yaml:"endpoint" json:"endpoint"`
+	ClientID     string   `yaml:"client_id" json:"client_id"`
+	ClientSecret string   `yaml:"client_secret" json:"client_secret"`
+	Tunnels      []Tunnel `yaml:"tunnels" json:"tunnels"`
 }
 
 // Tunnel binds a local listener to a (target_host, target_port) reached via
 // the owning client's configured endpoint.
 type Tunnel struct {
-	Name       string `yaml:"name"`
-	Listen     string `yaml:"listen"`
-	TargetHost string `yaml:"target_host"`
-	TargetPort int    `yaml:"target_port"`
+	Name       string `yaml:"name" json:"name"`
+	Listen     string `yaml:"listen" json:"listen"`
+	TargetHost string `yaml:"target_host" json:"target_host"`
+	TargetPort int    `yaml:"target_port" json:"target_port"`
 }

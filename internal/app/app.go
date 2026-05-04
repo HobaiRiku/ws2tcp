@@ -10,7 +10,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -43,10 +42,6 @@ func Run(ctx context.Context, opts Options) error {
 		opts.Logger = slog.Default()
 	}
 	cfg := opts.Config
-
-	if cfg.App.HTTPListen != "" && cfg.App.HTTPAuth && !isLoopbackAddr(cfg.App.HTTPListen) {
-		return fmt.Errorf("management api auth for non-loopback binds is not implemented yet")
-	}
 
 	registry, err := services.NewWithPaths(cfg, opts.Paths)
 	if err != nil {
@@ -104,13 +99,17 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime) error {
-	if opts.Config.App.HTTPAuth {
-		opts.Logger.Warn("management api auth is not wired yet; allowing loopback-only access")
-	}
+	auth := services.NewAuthService(opts.Paths.Tokens(), opts.Paths.FileMode())
 
 	srv := &http.Server{
-		Addr:              opts.Config.App.HTTPListen,
-		Handler:           api.NewRouter(api.Options{Registry: reg, Runtime: rt, Logger: opts.Logger.With("component", "api")}),
+		Addr: opts.Config.App.HTTPListen,
+		Handler: api.NewRouter(api.Options{
+			Registry:    reg,
+			Runtime:     rt,
+			Auth:        auth,
+			RequireAuth: opts.Config.App.HTTPAuth,
+			Logger:      opts.Logger.With("component", "api"),
+		}),
 		ReadHeaderTimeout: 15 * time.Second,
 	}
 
@@ -157,16 +156,4 @@ func runServer(ctx context.Context, opts Options, reg *services.Registry, rt *se
 	}
 	opts.Logger.Info("server listening", "addr", cfg.Listen, "ws_path", cfg.WSPath)
 	return srv.ListenAndServe()
-}
-
-func isLoopbackAddr(addr string) bool {
-	host, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		host = addr
-	}
-	if host == "localhost" {
-		return true
-	}
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback()
 }
