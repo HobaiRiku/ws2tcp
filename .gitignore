@@ -2,6 +2,10 @@
 node_modules
 *.pem
 !*.example.json
+# 前端配置必须入库
+!web/package.json
+!web/tsconfig.json
+!web/tsconfig.*.json
 
 # Go
 /bin/

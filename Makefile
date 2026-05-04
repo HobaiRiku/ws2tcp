@@ -28,9 +28,8 @@ EMBED_DIR := internal/web/static
 
 PKG := ./...
 
-# 优先 pnpm, 没装就回退到 npm.
-PNPM := $(shell command -v pnpm 2>/dev/null)
-NODE_MGR := $(if $(PNPM),pnpm,npm)
+# 前端统一使用 pnpm. corepack 自动 pin 到 web/package.json 的 packageManager.
+PNPM ?= pnpm
 
 .PHONY: all build run dev tidy fmt vet test test-unit test-service test-e2e \
 	web web-install web-dev web-build web-clean clean release print-version
@@ -73,13 +72,13 @@ test-e2e:
 web: web-build
 
 web-install:
-	cd $(WEB_DIR) && $(NODE_MGR) install
+	cd $(WEB_DIR) && $(PNPM) install
 
 web-dev:
-	cd $(WEB_DIR) && $(NODE_MGR) run dev
+	cd $(WEB_DIR) && $(PNPM) run dev
 
 web-build: web-install
-	cd $(WEB_DIR) && $(NODE_MGR) run build
+	cd $(WEB_DIR) && $(PNPM) run build
 
 web-clean:
 	rm -rf $(WEB_DIR)/node_modules $(WEB_DIR)/dist
