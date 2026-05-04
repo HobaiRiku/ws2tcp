@@ -16,8 +16,7 @@ const routes: RouteRecordRaw[] = [
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/Dashboard.vue') },
       { path: 'server', name: 'server', component: () => import('@/views/Server.vue') },
       { path: 'clients', name: 'clients', component: () => import('@/views/Clients.vue') },
-      { path: 'endpoints', name: 'endpoints', component: () => import('@/views/Endpoints.vue') },
-      { path: 'tokens', name: 'tokens', component: () => import('@/views/Tokens.vue') }
+      { path: 'endpoints', name: 'endpoints', component: () => import('@/views/Endpoints.vue') }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' }

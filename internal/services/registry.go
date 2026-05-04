@@ -12,7 +12,7 @@ import (
 )
 
 // Registry holds the runtime view of config, plus stateful sub-services
-// (replay, runtime counters, tokens — added as their consumers come online).
+// (replay, runtime counters, and other live helpers as they come online).
 //
 // Hot path is lock-free: reads consult an atomic.Pointer[snapshot]. Writes
 // go through Apply which builds a new snapshot and Stores it; in-flight
@@ -85,6 +85,7 @@ func (r *Registry) snap() *snapshot { return r.cur.Load() }
 // one pass.
 func buildSnapshot(cfg *config.Config) (*snapshot, error) {
 	s := &snapshot{
+		appToken:     cfg.App.HTTPToken,
 		byID:         map[string]*Identity{},
 		endpoints:    map[string]config.Endpoint{},
 		clientByName: map[string]*config.ClientProfile{},
@@ -138,4 +139,13 @@ func parseACL(raw []config.ACLRule) ([]ParsedACLRule, error) {
 		out = append(out, ParsedACLRule{CIDR: prefix, Ports: ports})
 	}
 	return out, nil
+}
+
+// HTTPToken returns the current fixed management API token from config.
+func (r *Registry) HTTPToken() string {
+	s := r.snap()
+	if s == nil {
+		return ""
+	}
+	return s.appToken
 }

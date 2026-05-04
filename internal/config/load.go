@@ -48,6 +48,7 @@ func Load(path string) (*Config, error) {
 func (c *Config) applyTrueDefaults() {
 	c.App.HTTPListen = "127.0.0.1:7321"
 	c.App.HTTPAuth = true
+	c.App.HTTPToken = "change-me-management-token"
 	c.App.LogLevel = "info"
 	c.Server.UseEncryption = true
 }
@@ -63,5 +64,8 @@ func (c *Config) applyZeroDefaults() {
 	}
 	if c.App.HTTPListen == "" {
 		c.App.HTTPListen = "127.0.0.1:7321"
+	}
+	if c.App.HTTPToken == "" && c.App.HTTPAuth {
+		c.App.HTTPToken = "change-me-management-token"
 	}
 }

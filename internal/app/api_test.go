@@ -13,16 +13,11 @@ import (
 	"websocket2Tcp/internal/app"
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/paths"
-	"websocket2Tcp/internal/services"
 )
 
 func TestRunServesManagementAPI(t *testing.T) {
 	p, cfg := writeAppConfig(t, "127.0.0.1:0", true)
-	auth := services.NewAuthService(p.Tokens(), p.FileMode())
-	token, _, err := auth.IssueToken("cli", []string{services.TokenScopeRead})
-	if err != nil {
-		t.Fatal(err)
-	}
+	token := cfg.App.HTTPToken
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -139,7 +134,7 @@ func writeAppConfig(t *testing.T, listen string, httpAuth bool) (paths.Paths, *c
 		t.Fatal(err)
 	}
 
-	raw := "app:\n  http_listen: \"" + listen + "\"\n  http_auth: " + boolYAML(httpAuth) + "\n  log_level: info\n"
+	raw := "app:\n  http_listen: \"" + listen + "\"\n  http_auth: " + boolYAML(httpAuth) + "\n  http_token: test-management-token\n  log_level: info\n"
 	if err := os.WriteFile(p.Config(), []byte(raw), 0o600); err != nil {
 		t.Fatal(err)
 	}

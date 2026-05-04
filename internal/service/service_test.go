@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -71,5 +73,22 @@ func TestStatusString(t *testing.T) {
 		if got := StatusString(status); got != want {
 			t.Fatalf("StatusString(%v) = %q, want %q", status, got, want)
 		}
+	}
+}
+
+func TestLoadOptionsInitializesMissingConfig(t *testing.T) {
+	home := t.TempDir()
+
+	opts, closer, err := loadOptions(home, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closer.Close()
+
+	if opts.Config.App.HTTPToken != "change-me-management-token" {
+		t.Fatalf("unexpected initialized token: %q", opts.Config.App.HTTPToken)
+	}
+	if _, err := os.Stat(filepath.Join(home, "config.yaml")); err != nil {
+		t.Fatalf("expected initialized config file: %v", err)
 	}
 }

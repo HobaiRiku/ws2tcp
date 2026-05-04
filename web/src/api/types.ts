@@ -8,9 +8,7 @@ export type VersionInfo = {
   go_version: string
 }
 
-export type AuthMe = {
-  name: string
-  scopes: string[]
+export type AuthStatus = {
   auth_required: boolean
 }
 
@@ -53,12 +51,6 @@ export type ClientProfile = {
   client_id: string
   endpoint: string
   tunnels: Tunnel[]
-}
-
-export type Token = {
-  name: string
-  scopes: string[]
-  created_at: string
 }
 
 export type ConfigDocument = Record<string, unknown>

@@ -3,7 +3,8 @@
 
 app:
   http_listen: "127.0.0.1:7321"   # management API + Web UI bind (loopback by default)
-  http_auth: true                 # require Bearer token from data/tokens.yaml
+  http_auth: true                 # require Bearer token from app.http_token
+  http_token: change-me-management-token
   log_level: info                 # debug | info | warn | error
 
 # ─────────────────────── server role ───────────────────────

@@ -43,6 +43,7 @@ type ClientTunnelBinding struct {
 // snapshot is the immutable bundle held behind atomic.Pointer so that ACL
 // edits can land while existing connections continue with their old view.
 type snapshot struct {
+	appToken       string
 	identities     []Identity
 	byID           map[string]*Identity
 	endpoints      map[string]config.Endpoint

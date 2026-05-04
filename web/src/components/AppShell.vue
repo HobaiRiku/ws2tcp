@@ -21,15 +21,11 @@ async function logout() {
       <router-link to="/server">Server</router-link>
       <router-link to="/clients">Clients</router-link>
       <router-link to="/endpoints">Endpoints</router-link>
-      <router-link to="/tokens">Tokens</router-link>
     </aside>
     <header class="app-header">
       <h1><router-view name="title" />Management Console</h1>
       <div class="me">
-        <span v-if="auth.me">
-          {{ auth.me.name }}
-          <span v-for="s in auth.me.scopes" :key="s" class="tag">{{ s }}</span>
-        </span>
+        <span v-if="auth.isAuthed">Authenticated</span>
         <fluent-button appearance="stealth" @click="logout">Logout</fluent-button>
       </div>
     </header>

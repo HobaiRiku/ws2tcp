@@ -6,11 +6,11 @@ import { fileURLToPath, URL } from 'node:url'
 // //go:embed static/* 自动拾取. dev 时通过 proxy 把 /api 转发到本地后端.
 //
 // 默认 dev port = 5266, 走 .env / .env.local 用 VITE_DEV_PORT 覆盖.
-// dev 阶段 /api proxy 目标用 VITE_API_PROXY_TARGET 覆盖, 默认 http://127.0.0.1:8080.
+// dev 阶段 /api proxy 目标用 VITE_API_PROXY_TARGET 覆盖, 默认 http://127.0.0.1:7321.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const port = Number(env.VITE_DEV_PORT) || 5266
-  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8080'
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:7321'
 
   return {
     plugins: [

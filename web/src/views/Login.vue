@@ -34,18 +34,17 @@ async function submit() {
     <div class="login-card">
       <h1>Sign in</h1>
       <p class="hint">
-        Paste a management API token. New tokens can be issued with
-        <code>ws2tcp auth tokens issue</code>.
+        Paste the fixed management token from <code>config.yaml</code>.
       </p>
       <div v-if="error" class="banner error">{{ error }}</div>
       <fluent-text-field
         type="password"
         :value="token"
-        placeholder="Bearer token"
+        placeholder="Management token"
         @input="(e: Event) => (token = (e.target as HTMLInputElement).value)"
         @keydown.enter="submit"
       >
-        API token
+        Management token
       </fluent-text-field>
       <div style="height: 0.75rem" />
       <fluent-button appearance="accent" :disabled="busy || !token" @click="submit">

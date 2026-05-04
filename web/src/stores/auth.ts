@@ -1,22 +1,22 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, tokenStore } from '@/api/client'
-import type { AuthMe } from '@/api/types'
+import type { AuthStatus } from '@/api/types'
 
 export const useAuthStore = defineStore('auth', () => {
-  const me = ref<AuthMe | null>(null)
+  const status = ref<AuthStatus | null>(null)
   const ready = ref(false)
 
-  const isAuthed = computed(() => me.value !== null)
+  const isAuthed = computed(() => status.value !== null)
 
   async function refresh() {
-    const [err, data] = await api.get<AuthMe>('/api/auth/me')
+    const [err, data] = await api.get<AuthStatus>('/api/auth/me')
     if (err) {
-      me.value = null
+      status.value = null
       ready.value = true
       return false
     }
-    me.value = data
+    status.value = data
     ready.value = true
     return true
   }
@@ -30,14 +30,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() {
     tokenStore.clear()
-    me.value = null
+    status.value = null
   }
 
-  function hasScope(scope: string) {
-    if (!me.value) return false
-    if (me.value.scopes.includes('admin')) return true
-    return me.value.scopes.includes(scope)
-  }
-
-  return { me, ready, isAuthed, refresh, login, logout, hasScope }
+  return { status, ready, isAuthed, refresh, login, logout }
 })

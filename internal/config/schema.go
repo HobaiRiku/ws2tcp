@@ -18,6 +18,7 @@ type Config struct {
 type AppConfig struct {
 	HTTPListen string `yaml:"http_listen" json:"http_listen"`
 	HTTPAuth   bool   `yaml:"http_auth" json:"http_auth"`
+	HTTPToken  string `yaml:"http_token" json:"http_token"`
 	LogLevel   string `yaml:"log_level" json:"log_level"`
 }
 

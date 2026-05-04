@@ -24,7 +24,6 @@ On startup the binary creates and `chmod 0700`s the tree (file mode
 │   ├── cert.pem
 │   └── key.pem
 ├── data/
-│   ├── tokens.yaml      # API tokens (separate file = easy to chmod / rotate)
 │   └── runtime.json     # last-known runtime state, written on shutdown (advisory only)
 └── logs/
     └── ws2tcp.log       # slog JSON, daily rotation via lumberjack-style writer
@@ -41,9 +40,10 @@ app:
   # Bind address for the management HTTP server (API + Web UI).
   # Default loopback-only; set "0.0.0.0:7321" deliberately to expose.
   http_listen: "127.0.0.1:7321"
-  # When true, the management API requires a Bearer token from data/tokens.yaml.
+  # When true, the management API requires a Bearer token from app.http_token.
   # Setting false is only honored when http_listen is loopback.
   http_auth: true
+  http_token: change-me-management-token
   log_level: info               # debug|info|warn|error
 
 # ─────────────────────── server role ───────────────────────
@@ -120,22 +120,10 @@ Schema-level notes:
   and listen addresses are always quoted (`"0.0.0.0:3005"`) to avoid
   the colon being parsed as a mapping.
 
-## Tokens
+## Management token
 
-`data/tokens.yaml` is separate so it can have stricter `chmod` and so
-edits don't churn the main config file:
-
-```yaml
-tokens:
-  - name: cli-local
-    hash: "argon2id$..."
-    created_at: 2026-05-03T10:00:00Z
-    expires_at: 0                # 0 = never
-    scopes: [admin]              # admin | read | client:write | server:write
-```
-
-We store **argon2id hashes**, not plaintext. Plaintext is shown exactly
-once when `ws2tcp config token add` issues a token.
+The management API uses one fixed Bearer token stored in
+`app.http_token`. Rotate it by editing `config.yaml`.
 
 When `app.http_auth: false` *and* `app.http_listen` resolves to a
 loopback address, the API skips token checks. Any non-loopback bind

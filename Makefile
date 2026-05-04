@@ -25,6 +25,7 @@ LDFLAGS := -s -w \
 BUILD_DIR := build/bin
 WEB_DIR   := web
 EMBED_DIR := internal/web/static
+LOCAL_HOME := $(CURDIR)/.ws2tcp-home
 
 PKG := ./...
 
@@ -44,7 +45,7 @@ build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME) .
 
 run:
-	go run -ldflags "$(LDFLAGS)" . run
+	WS2TCP_HOME=$(LOCAL_HOME) go run -ldflags "$(LDFLAGS)" . run
 
 dev: run
 
@@ -60,12 +61,14 @@ vet:
 test: test-unit
 
 test-unit:
-	go test $(PKG)
+	WS2TCP_HOME=$(LOCAL_HOME) go test $(PKG)
 
 test-service:
+	@mkdir -p $(LOCAL_HOME)
 	@echo "TODO: service-layer integration tests"
 
 test-e2e:
+	@mkdir -p $(LOCAL_HOME)
 	@echo "TODO: Go<->Node interop tests under tests/interop/"
 
 # ---- Web -------------------------------------------------------------------

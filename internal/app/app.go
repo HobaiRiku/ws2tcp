@@ -102,7 +102,7 @@ func Run(ctx context.Context, opts Options) error {
 }
 
 func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
-	auth := services.NewAuthService(opts.Paths.Tokens(), opts.Paths.FileMode())
+	auth := services.NewAuthService(reg.HTTPToken)
 	router := api.NewRouter(api.Options{
 		Registry:    reg,
 		Runtime:     rt,

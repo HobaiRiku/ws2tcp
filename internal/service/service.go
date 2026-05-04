@@ -173,9 +173,16 @@ func loadOptions(home string, console bool) (app.Options, io.Closer, error) {
 	if err != nil {
 		var miss *config.MissingFileError
 		if errors.As(err, &miss) {
-			return app.Options{}, nil, fmt.Errorf("config not found at %s — copy config.example.yaml to start", miss.Path)
+			if err := config.WriteExample(p.Config(), p.FileMode()); err != nil {
+				return app.Options{}, nil, fmt.Errorf("init config at %s: %w", miss.Path, err)
+			}
+			cfg, err = config.Load(p.Config())
+			if err != nil {
+				return app.Options{}, nil, fmt.Errorf("load initialized config: %w", err)
+			}
+		} else {
+			return app.Options{}, nil, err
 		}
-		return app.Options{}, nil, err
 	}
 
 	logger, closer, err := log.Init(log.Options{

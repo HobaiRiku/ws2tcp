@@ -44,16 +44,6 @@ type clientPatchRequest struct {
 	ACL    *[]config.ACLRule `json:"acl"`
 }
 
-type tokenCreateRequest struct {
-	Name   string   `json:"name"`
-	Scopes []string `json:"scopes"`
-}
-
-type tokenCreateResponse struct {
-	services.TokenInfo
-	Token string `json:"token"`
-}
-
 type serverStatsResponse struct {
 	BytesIn           uint64           `json:"bytes_in"`
 	BytesOut          uint64           `json:"bytes_out"`
@@ -89,15 +79,14 @@ func NewRouter(opts Options) *gin.Engine {
 			token = c.Query("token")
 		}
 		if !opts.RequireAuth {
-			c.JSON(http.StatusOK, gin.H{"name": "anonymous", "scopes": []string{"admin"}, "auth_required": false})
+			c.JSON(http.StatusOK, gin.H{"auth_required": false})
 			return
 		}
-		info, err := opts.Auth.VerifyToken(token, services.TokenScopeRead)
-		if err != nil {
+		if _, err := opts.Auth.VerifyToken(token, services.TokenScopeRead); err != nil {
 			writeError(c, classifyStatus(err), "AUTH_FAILED", err)
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"name": info.Name, "scopes": info.Scopes, "auth_required": true})
+		c.JSON(http.StatusOK, gin.H{"auth_required": true})
 	})
 
 	clientWrite := authorize(opts, services.TokenScopeClientWrite)
@@ -315,42 +304,15 @@ func NewRouter(opts Options) *gin.Engine {
 	api.GET("/events/stream", readOnly, eventws.StreamHandler(opts.Events))
 	api.GET("/events/ws", readOnly, eventws.WebSocketHandler(opts.Events))
 
-	api.GET("/auth/tokens", adminOnly, func(c *gin.Context) {
-		tokens, err := opts.Auth.ListTokens()
-		if err != nil {
-			writeError(c, http.StatusInternalServerError, "LIST_TOKENS_FAILED", err)
-			return
-		}
-		c.JSON(http.StatusOK, tokens)
-	})
-	api.POST("/auth/tokens", adminOnly, func(c *gin.Context) {
-		var req tokenCreateRequest
-		if err := c.ShouldBindJSON(&req); err != nil {
-			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
-			return
-		}
-		token, info, err := opts.Auth.IssueToken(req.Name, req.Scopes)
-		if err != nil {
-			writeError(c, classifyStatus(err), "ISSUE_TOKEN_FAILED", err)
-			return
-		}
-		c.JSON(http.StatusCreated, tokenCreateResponse{TokenInfo: info, Token: token})
-	})
-	api.DELETE("/auth/tokens/:name", adminOnly, func(c *gin.Context) {
-		if err := opts.Auth.RevokeToken(c.Param("name")); err != nil {
-			writeError(c, classifyStatus(err), "REVOKE_TOKEN_FAILED", err)
-			return
-		}
-		c.Status(http.StatusNoContent)
-	})
-
 	return router
 }
 
 func redactConfig(cfg *config.Config) *config.Config {
 	cp := *cfg
+	cp.App = cfg.App
 	cp.Server = cfg.Server
 	cp.Client = cfg.Client
+	cp.App.HTTPToken = ""
 	cp.Server.AESKey = ""
 	cp.Server.Clients = make([]config.ClientIdentity, len(cfg.Server.Clients))
 	for i, client := range cfg.Server.Clients {
@@ -440,12 +402,6 @@ func classifyStatus(err error) int {
 	}
 	if errors.Is(err, services.ErrTokenUnauthorized) {
 		return http.StatusUnauthorized
-	}
-	if errors.Is(err, services.ErrTokenForbidden) {
-		return http.StatusForbidden
-	}
-	if errors.Is(err, services.ErrTokenNotFound) {
-		return http.StatusNotFound
 	}
 	var missing *config.MissingFileError
 	if errors.As(err, &missing) {

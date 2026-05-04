@@ -52,6 +52,9 @@ server:
 	if !cfg.App.HTTPAuth {
 		t.Error("http_auth should default true")
 	}
+	if cfg.App.HTTPToken != "change-me-management-token" {
+		t.Errorf("http_token default missing: %q", cfg.App.HTTPToken)
+	}
 }
 
 func TestExplicitFalseOverridesDefault(t *testing.T) {
@@ -143,6 +146,20 @@ app:
 	_, err := Load(p)
 	if err == nil || !strings.Contains(err.Error(), "loopback") {
 		t.Fatalf("want loopback error, got: %v", err)
+	}
+}
+
+func TestWriteExample(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := WriteExample(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.App.HTTPToken != "change-me-management-token" {
+		t.Fatalf("unexpected http token: %q", cfg.App.HTTPToken)
 	}
 }
 

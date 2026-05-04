@@ -132,10 +132,6 @@ GET    /api/config                        full snapshot, secrets redacted
 PUT    /api/config                        replace whole file (validated)
 GET    /api/config/path                   absolute path on disk
 
-# Tokens (admin scope only)
-GET    /api/auth/tokens
-POST   /api/auth/tokens                   returns plaintext exactly once
-DELETE /api/auth/tokens/{name}
 ```
 
 JSON bodies map 1:1 to the `services.*Spec` structs. Errors use a
@@ -143,15 +139,13 @@ small envelope `{ "code": "ACL_DENY", "message": "...", "details": …}`.
 
 ### Auth model
 
-`Authorization: Bearer <token>` header, verified against argon2id
-hashes in `data/tokens.yaml`. For `/api/events/ws` the token is also
-accepted as a `?token=` query param, since browsers can't set headers
-on the native `WebSocket()` constructor. Three scopes:
+`Authorization: Bearer <token>` header, verified against the fixed
+`app.http_token` value in `config.yaml`. For `/api/events/ws` the token
+is also accepted as a `?token=` query param, since browsers can't set
+headers on the native `WebSocket()` constructor.
 
-- `admin` — everything, including token CRUD.
-- `client:write` — tunnel CRUD + start/stop.
-- `server:write` — identity + ACL CRUD + connection kick.
-- `read` — implied by the others; standalone for read-only dashboards.
+The current implementation uses one fixed management token, so a valid
+token grants full access to the management API.
 
 If `app.http_listen` is loopback **and** `app.http_auth=false`, the
 auth middleware is bypassed. Any non-loopback bind forces auth on
@@ -163,11 +157,10 @@ The CLI is a thin shell over `services.Registry`. Two binding modes:
 
 - **In-process**: when no daemon is running (or running but the user
   prefers direct), commands open the config tree, build a *read-only*
-  `Registry` against the on-disk state, and operate. Useful for
-  bootstrap (`ws2tcp config token add` before any daemon exists).
+  `Registry` against the on-disk state, and operate.
 - **Remote**: when a daemon is up, commands talk to its HTTP API using
-  a token saved in `data/cli-token` (created on first `install`). This
-  is the path that takes effect on the live process.
+  the configured management token. This is the path that takes effect on
+  the live process.
 
 `ws2tcp config endpoint` toggles the default. By default the CLI tries
 remote, falls back to in-process with a warning.
@@ -184,9 +177,6 @@ ws2tcp config edit                           # opens $EDITOR on config.yaml
 ws2tcp config set <dotted.key> <value>
 ws2tcp config path
 ws2tcp config client-auth set --client-id … --client-secret …
-ws2tcp config token add  --name <n> --scope admin
-ws2tcp config token list
-ws2tcp config token rm   <name>
 
 ws2tcp server clients list
 ws2tcp server clients add    --id … --secret … [--acl …]

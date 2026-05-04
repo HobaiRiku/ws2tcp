@@ -23,7 +23,6 @@ const (
 	subLogs  = "logs"
 
 	fileConfig = "config.yaml"
-	fileTokens = "tokens.yaml" // lives under data/
 	fileLog    = "ws2tcp.log" // lives under logs/
 
 	dirMode  os.FileMode = 0o700
@@ -64,8 +63,8 @@ func pickHome(override string) (string, error) {
 }
 
 // EnsureTree creates Home, certs/, data/, logs/ with mode 0700, idempotent.
-// Files inside (config.yaml, tokens.yaml, log file) are created lazily by
-// their respective writers with mode 0600.
+// Files inside (config.yaml, log file) are created lazily by their respective
+// writers with mode 0600.
 func (p Paths) EnsureTree() error {
 	for _, d := range []string{p.Home, p.Certs(), p.Data(), p.Logs()} {
 		if err := os.MkdirAll(d, dirMode); err != nil {
@@ -83,7 +82,7 @@ func (p Paths) EnsureTree() error {
 // Certs is the directory for optional sslCert/sslKey used by native wss.
 func (p Paths) Certs() string { return filepath.Join(p.Home, subCerts) }
 
-// Data holds tokens.yaml and other small persisted runtime state.
+// Data holds other small persisted runtime state.
 func (p Paths) Data() string { return filepath.Join(p.Home, subData) }
 
 // Logs holds ws2tcp.log and rotation siblings.
@@ -91,9 +90,6 @@ func (p Paths) Logs() string { return filepath.Join(p.Home, subLogs) }
 
 // Config returns the absolute path to config.yaml.
 func (p Paths) Config() string { return filepath.Join(p.Home, fileConfig) }
-
-// Tokens returns the absolute path to data/tokens.yaml.
-func (p Paths) Tokens() string { return filepath.Join(p.Data(), fileTokens) }
 
 // LogFile returns the absolute path to logs/ws2tcp.log.
 func (p Paths) LogFile() string { return filepath.Join(p.Logs(), fileLog) }

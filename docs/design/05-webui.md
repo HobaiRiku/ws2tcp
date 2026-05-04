@@ -44,9 +44,9 @@ Kept intentionally small. Six views map 1:1 to API resources:
 5. **Client / Tunnels** — table with columns NAME, STATE, LISTEN,
    TARGET, CONNS. Create/edit dialog only asks for tunnel-local fields,
    since the client endpoint is configured separately once.
-6. **Settings** — `app:` block, token management, `config.yaml` raw
-   editor (Monaco) for power users; saving validates server-side via
-   `PUT /api/config`.
+6. **Settings** — `app:` block, fixed management token guidance, and
+   `config.yaml` raw editor (Monaco) for power users; saving validates
+   server-side via `PUT /api/config`.
 
 ## Frontend ↔ backend contract
 

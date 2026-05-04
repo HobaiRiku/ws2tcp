@@ -30,6 +30,9 @@ func (c *Config) validateApp() []string {
 			"app.http_auth=false is only allowed when app.http_listen is loopback (got %q)",
 			c.App.HTTPListen))
 	}
+	if c.App.HTTPAuth && strings.TrimSpace(c.App.HTTPToken) == "" {
+		errs = append(errs, "app.http_token required when app.http_auth=true")
+	}
 	switch strings.ToLower(c.App.LogLevel) {
 	case "debug", "info", "warn", "warning", "error":
 	default:
