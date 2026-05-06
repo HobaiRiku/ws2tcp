@@ -1,11 +1,6 @@
 node_modules
 *.pem
 !*.example.json
-# 前端配置必须入库
-!web/package.json
-!web/tsconfig.json
-!web/tsconfig.*.json
-!web/.prettierrc.json
 
 # Go
 /bin/
@@ -14,8 +9,13 @@ node_modules
 *.out
 
 # Frontend
-/web/dist/
-/web/node_modules/
+/ui/dist/
+/ui/node_modules/
+
+# UI build artifacts embedded by Go (`go:embed`).
+# 保留 .gitkeep 让 `//go:embed all:static` 能编译; 真正产物由 `make ui-build` 生成.
+/internal/web/static/*
+!/internal/web/static/.gitkeep
 
 # Local env
 .env

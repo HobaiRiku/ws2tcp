@@ -3,8 +3,13 @@
 # Build pipeline:
 #   make ui-install    # 一次性: 装前端依赖 (pnpm)
 #   make ui-build      # 构建 SPA 到 internal/web/static/
-#   make build         # 构建 Go 二进制 (注入 git 版本到 ldflags)
+#   make build         # 构建 Go 二进制 (会先跑 ui-build)
+#   make run / dev     # 本地起服务 (会先跑 ui-build)
 #   make all           # 等价 ui-build + build
+#
+# internal/web/static/ 下的产物全部由 .gitignore 忽略, 仓库里只保留一个
+# .gitkeep 占位让 //go:embed all:static 在没构建前端时也能编译; 没构建时访问
+# UI 会看到 embed.go 里的 "UI 尚未构建" 提示页, API 仍然正常.
 #
 # 版本注入: -ldflags "-X websocket2Tcp/internal/version.Version=..." 等等。
 # CLI: ws2tcp -v / ws2tcp version
@@ -41,11 +46,11 @@ all: ui-build build
 
 # ---- Go --------------------------------------------------------------------
 
-build:
+build: ui-build
 	@mkdir -p $(BUILD_DIR)
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(APP_NAME) .
 
-run:
+run: ui-build
 	WS2TCP_HOME=$(LOCAL_HOME) go run -ldflags "$(LDFLAGS)" . run
 
 dev: run
@@ -83,6 +88,8 @@ ui-dev:
 	cd $(UI_DIR) && $(PNPM) run dev
 
 ui-build: ui-install
+	# vite 配置里 emptyOutDir=false (避免误删 .gitkeep), 这里手动清理上次产物.
+	rm -rf $(EMBED_DIR)/assets $(EMBED_DIR)/index.html
 	cd $(UI_DIR) && $(PNPM) run build
 
 ui-lint:
@@ -99,8 +106,9 @@ ui-typecheck:
 
 ui-clean:
 	rm -rf $(UI_DIR)/node_modules $(UI_DIR)/dist
-	# 保留 placeholder index.html 让 go test 在没构建前端时也通过
-	find $(EMBED_DIR) -type f ! -name 'index.html' -delete 2>/dev/null || true
+	# 保留 .gitkeep, 让 //go:embed all:static 在没构建前端时也能编译;
+	# index.html 缺失由 embed.go 的占位 HTML 处理.
+	find $(EMBED_DIR) -mindepth 1 -not -name '.gitkeep' -delete 2>/dev/null || true
 
 web: ui
 web-install: ui-install
