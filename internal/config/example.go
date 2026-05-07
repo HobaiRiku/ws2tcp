@@ -2,6 +2,7 @@ package config
 
 import (
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"os"
@@ -40,7 +41,7 @@ func Example() *Config {
 		App: AppConfig{
 			HTTPListen: "127.0.0.1:7321",
 			HTTPAuth:   true,
-			HTTPToken:  "change-me-management-token",
+			HTTPToken:  randomHTTPToken(),
 			LogLevel:   "info",
 		},
 		Server: ServerConfig{
@@ -120,6 +121,17 @@ func randomAESKey() string {
 		out[i] = aesKeyAlphabet[int(buf[i])%len(aesKeyAlphabet)]
 	}
 	return string(out)
+}
+
+// randomHTTPToken 给首次 init 的管理 API 生成一个随机 token (32 位 hex,
+// 即 16 字节熵). 失败极罕见, 但仍然返回一个安全占位 — 用一个明显的
+// "REGENERATE-ME-..." 前缀让用户一眼看出来有问题, 而不是误以为是真 token.
+func randomHTTPToken() string {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "REGENERATE-ME-rand-failed"
+	}
+	return hex.EncodeToString(buf)
 }
 
 // portFromListen 从 "host:port" 形式的监听字符串里抽出端口; 解析失败回退 def.

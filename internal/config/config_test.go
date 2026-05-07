@@ -154,8 +154,26 @@ func TestWriteExample(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.App.HTTPToken != "change-me-management-token" {
-		t.Fatalf("unexpected http token: %q", cfg.App.HTTPToken)
+	// init 时的 http_token 必须是随机生成的, 不能是占位字符串, 而且至少
+	// 要够 32 hex 位 (== 16 字节熵).
+	tok := cfg.App.HTTPToken
+	if tok == "" || tok == "change-me-management-token" || strings.HasPrefix(tok, "REGENERATE-ME") {
+		t.Fatalf("http_token should be random, got %q", tok)
+	}
+	if len(tok) < 32 {
+		t.Fatalf("http_token too short: %q", tok)
+	}
+	// 两次 WriteExample 必须给出不同的 token.
+	other := filepath.Join(t.TempDir(), "config.yaml")
+	if err := WriteExample(other, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	other2, err := Load(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if other2.App.HTTPToken == tok {
+		t.Fatal("expected each WriteExample to mint a fresh http_token")
 	}
 }
 

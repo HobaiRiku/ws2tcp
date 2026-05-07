@@ -85,8 +85,11 @@ func TestLoadOptionsInitializesMissingConfig(t *testing.T) {
 	}
 	defer closer.Close()
 
-	if opts.Config.App.HTTPToken != "change-me-management-token" {
-		t.Fatalf("unexpected initialized token: %q", opts.Config.App.HTTPToken)
+	// Init writes a randomly-generated token; just sanity check it looks
+	// like real entropy (long enough, not the historical placeholder).
+	tok := opts.Config.App.HTTPToken
+	if tok == "" || tok == "change-me-management-token" || len(tok) < 32 {
+		t.Fatalf("unexpected initialized token: %q", tok)
 	}
 	if _, err := os.Stat(filepath.Join(home, "config.yaml")); err != nil {
 		t.Fatalf("expected initialized config file: %v", err)
