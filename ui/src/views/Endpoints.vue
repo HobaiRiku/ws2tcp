@@ -8,11 +8,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import Modal from '@/components/Modal.vue'
 import IconBtn from '@/components/IconBtn.vue'
 import { useI18n } from 'vue-i18n'
-import {
-  parseServerConfigEnvelope,
-  readClipboardText,
-  generateAesKey32
-} from '@/utils/clipboard'
+import { parseServerConfigEnvelope, readClipboardText } from '@/utils/clipboard'
 
 type EndpointForm = Endpoint & {
   ip: string
@@ -82,7 +78,8 @@ function openEdit(endpoint: Endpoint) {
     port: endpoint.port,
     path: endpoint.path,
     wss: endpoint.wss,
-    aes_key: '',
+    // 后端会直接回显 aes_key, 这里完整带回弹窗.
+    aes_key: endpoint.aes_key ?? '',
     ssl_reject_unauthorized: endpoint.ssl_reject_unauthorized ?? false
   }
   dialogOpen.value = true
@@ -109,7 +106,7 @@ async function pasteFromClipboard() {
 
 async function save() {
   busy.value = true
-  if (!editingName.value && form.value.aes_key.trim().length !== 32) {
+  if (form.value.aes_key.trim().length !== 32) {
     busy.value = false
     toast.error(t('endpoints.aesKeyTooShort'))
     return
@@ -122,9 +119,9 @@ async function save() {
       port: form.value.port,
       path: form.value.path,
       wss: form.value.wss,
+      aes_key: form.value.aes_key.trim(),
       ssl_reject_unauthorized: form.value.ssl_reject_unauthorized
     }
-    if (form.value.aes_key.trim()) payload.aes_key = form.value.aes_key.trim()
     const [err] = await api.patch(`/api/client/endpoints/${encodeURIComponent(editingName.value)}`, payload)
     busy.value = false
     if (err) return toast.error(err.message)
@@ -252,20 +249,12 @@ onMounted(() => {
         </label>
         <label>
           <span class="field-label">{{ t('endpoints.fieldAesKey') }}</span>
-          <div class="inline-group">
-            <input
-              v-model="form.aes_key"
-              class="text-input"
-              type="text"
-              :placeholder="editingName ? t('endpoints.aesKeyPlaceholderEdit') : t('endpoints.aesKeyPlaceholderNew')"
-            />
-            <IconBtn
-              icon="generate"
-              size="sm"
-              :title="t('common.generate')"
-              @click="form.aes_key = generateAesKey32()"
-            />
-          </div>
+          <input
+            v-model="form.aes_key"
+            class="text-input mono"
+            type="text"
+            :placeholder="t('endpoints.aesKeyPlaceholderNew')"
+          />
         </label>
       </div>
 

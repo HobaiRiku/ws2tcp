@@ -554,10 +554,10 @@ func redactConfig(cfg *config.Config) *config.Config {
 	return &cp
 }
 
+// 内部管理面板, endpoint AES key 直接回显, 方便用户编辑时一眼看到当前值.
+// /api/config 全量导出仍由 redactConfig 抹掉 aes_key.
 func redactEndpoint(endpoint config.Endpoint) config.Endpoint {
-	cp := endpoint
-	cp.AESKey = ""
-	return cp
+	return endpoint
 }
 
 func redactEndpoints(endpoints []config.Endpoint) []config.Endpoint {

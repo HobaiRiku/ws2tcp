@@ -49,7 +49,8 @@ export type Endpoint = {
   port: number
   path: string
   wss: boolean
-  aes_key?: string
+  // 后端在管理面板里直接明文回显
+  aes_key: string
   ssl_reject_unauthorized?: boolean
 }
 

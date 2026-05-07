@@ -191,6 +191,27 @@ func TestAllowsDNSAllAddrsMustMatch(t *testing.T) {
 	}
 }
 
+func TestAllowsEmptyACLBypassesGate(t *testing.T) {
+	cfg := sampleConfig()
+	// 把 u1 的 ACL 清空, 模拟"未配置 ACL"的 client.
+	cfg.Server.Clients[0].ACL = nil
+	r, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := r.Verify("u1", "s1")
+	if len(id.ACL) != 0 {
+		t.Fatalf("expected empty ACL, got: %+v", id.ACL)
+	}
+	// dual-stack: 应该都放行, 不解析也不调用 resolver.
+	for _, host := range []string{"127.0.0.1", "::1", "8.8.8.8", "anything.example"} {
+		ok, err := r.Allows(context.Background(), id, host, 9999, fixedResolver{})
+		if err != nil || !ok {
+			t.Errorf("empty ACL should allow %s: ok=%v err=%v", host, ok, err)
+		}
+	}
+}
+
 func TestApplySwapsSnapshot(t *testing.T) {
 	r, err := New(sampleConfig())
 	if err != nil {

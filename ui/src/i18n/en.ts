@@ -181,6 +181,16 @@ export default {
     settingsSaved: 'Settings saved, restarting server…',
     settingsSavedSoft: 'Settings saved',
     copyServerConfig: 'Copy config (for client endpoint setup)',
-    transportRestartHint: 'Changing listen / path / TLS / AES key restarts the server subsystem'
+    transportRestartHint: 'Changing listen / path / TLS / AES key restarts the server subsystem',
+    summaryListen: 'Listen',
+    summaryWsPath: 'WS path',
+    summaryWsHost: 'WS host',
+    summaryTls: 'TLS',
+    summaryEncryption: 'End-to-end encryption',
+    summaryTrustProxy: 'Trust proxy',
+    summaryAesKey: 'AES key',
+    summaryAny: 'any',
+    summaryShowKey: 'show',
+    summaryHideKey: 'hide'
   }
 }

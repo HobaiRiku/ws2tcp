@@ -23,6 +23,7 @@ const confirm = useConfirm()
 const list = ref<ServerClient[]>([])
 const settings = ref<ServerSettings | null>(null)
 const busy = ref(false)
+const showAes = ref(false)
 
 const clientDialog = ref<{
   open: boolean
@@ -240,6 +241,58 @@ onMounted(() => {
         <IconBtn icon="add" variant="primary" :title="t('common.add')" @click="openCreateClient" />
       </div>
     </div>
+
+    <section v-if="settings" class="settings-summary-card">
+      <div class="summary-grid">
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryListen') }}</span>
+          <strong class="mono">{{ settings.listen || '—' }}</strong>
+        </div>
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryWsPath') }}</span>
+          <strong class="mono">{{ settings.ws_path || '—' }}</strong>
+        </div>
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryWsHost') }}</span>
+          <strong class="mono">{{ settings.ws_host || t('server.summaryAny') }}</strong>
+        </div>
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryTls') }}</span>
+          <strong>
+            <span class="badge" :class="settings.tls_enabled ? 'badge-ok' : 'badge-neutral'">
+              {{ settings.tls_enabled ? t('common.enabled') : t('common.disabled') }}
+            </span>
+          </strong>
+        </div>
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryEncryption') }}</span>
+          <strong>
+            <span class="badge" :class="settings.use_encryption ? 'badge-ok' : 'badge-neutral'">
+              {{ settings.use_encryption ? t('common.enabled') : t('common.disabled') }}
+            </span>
+          </strong>
+        </div>
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryTrustProxy') }}</span>
+          <strong>
+            <span class="badge" :class="settings.trust_proxy ? 'badge-info' : 'badge-neutral'">
+              {{ settings.trust_proxy ? t('common.enabled') : t('common.disabled') }}
+            </span>
+          </strong>
+        </div>
+        <div class="summary-cell summary-cell-wide">
+          <span class="summary-label">{{ t('server.summaryAesKey') }}</span>
+          <div class="summary-aes">
+            <strong class="mono">
+              {{ showAes ? settings.aes_key : '••••••••••••••••••••••••••••••••' }}
+            </strong>
+            <button type="button" class="link-btn" @click="showAes = !showAes">
+              {{ showAes ? t('server.summaryHideKey') : t('server.summaryShowKey') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <table class="table">
       <thead>

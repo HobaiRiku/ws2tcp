@@ -181,6 +181,16 @@ export default {
     settingsSaved: '已保存设置，server 正在重启…',
     settingsSavedSoft: '已保存设置',
     copyServerConfig: '复制配置（供客户端 endpoint 录入）',
-    transportRestartHint: '修改监听 / 路径 / TLS / AES 密钥后会自动重启 server 子系统'
+    transportRestartHint: '修改监听 / 路径 / TLS / AES 密钥后会自动重启 server 子系统',
+    summaryListen: '监听',
+    summaryWsPath: 'WS 路径',
+    summaryWsHost: 'WS Host',
+    summaryTls: 'TLS',
+    summaryEncryption: '端到端加密',
+    summaryTrustProxy: '信任代理',
+    summaryAesKey: 'AES key',
+    summaryAny: '任意',
+    summaryShowKey: '显示',
+    summaryHideKey: '隐藏'
   }
 }

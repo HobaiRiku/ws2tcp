@@ -80,8 +80,9 @@ func TestClientEndpoints(t *testing.T) {
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"edge"`) {
 		t.Fatalf("unexpected endpoint inventory response: %d %s", rr.Code, rr.Body.String())
 	}
-	if strings.Contains(rr.Body.String(), `"aes_key":"`+testAESKey+`"`) {
-		t.Fatalf("endpoint aes key leaked: %s", rr.Body.String())
+	// endpoint aes_key 在内部管理面板里直接回显; /api/config 全量导出仍会抹掉.
+	if !strings.Contains(rr.Body.String(), `"aes_key":"`+testAESKey+`"`) {
+		t.Fatalf("expected endpoint aes_key echoed back: %s", rr.Body.String())
 	}
 
 	rr = performJSON(t, router, http.MethodPost, "/api/client/endpoints", token, config.Endpoint{
