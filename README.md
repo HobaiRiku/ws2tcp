@@ -219,7 +219,7 @@ make all             # 等价 make ui-build && make build
 
 ## 协议许可
 
-License: TBD（待补）。
+[MIT License](LICENSE) © 2026 LuBaobei
 
 如果你要把它用到生产环境，请先：
 1. 用 `make build` 自构一份；2. 确认 `app.http_token` 是真随机；3. 用 nginx + Let's Encrypt 包一层 wss；4. ACL 收紧到最小授权范围。
