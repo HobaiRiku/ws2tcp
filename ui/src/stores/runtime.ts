@@ -9,6 +9,10 @@ import type {
 } from '@/api/types'
 
 const MAX_EVENTS = 30
+// 定期回拉运行时状态。事件流虽然能增量更新连接计数/隧道状态,
+// 但 uptime / bytes_in / bytes_out 这类汇总只能轮询;并且事件流断线时
+// 也靠这个保底刷新。
+const POLL_INTERVAL_MS = 3000
 
 function tunnelKey(client: string, tunnel: string) {
   return `${client}\u0000${tunnel}`
@@ -35,9 +39,14 @@ export const useRuntimeStore = defineStore('runtime', () => {
   const tunnelStatusMap = ref<Record<string, TunnelRuntimeStatus>>({})
   const recentEvents = ref<EventMessage[]>([])
   const connected = ref(false)
+  // 日志事件订阅: 每个 LogViewer 实例注册一个 listener,
+  // 后端通过事件总线推送的 topic=log 消息会被广播给所有 listener,
+  // 由前端按需 (client_id / tunnel / 等) 过滤显示.
+  const logListeners = new Set<(event: EventMessage) => void>()
 
   let socket: WebSocket | null = null
   let reconnectTimer: number | null = null
+  let pollTimer: number | null = null
   let closedManually = false
 
   const tunnels = computed(() =>
@@ -101,6 +110,12 @@ export const useRuntimeStore = defineStore('runtime', () => {
     }
     if (!event.topic) return
 
+    if (event.topic === 'log') {
+      // 不进入 recentEvents — 日志体量大, 只发给注册了 listener 的 viewer.
+      for (const fn of logListeners) fn(event)
+      return
+    }
+
     pushEvent(event)
 
     if (event.topic === 'tunnel.state') {
@@ -140,11 +155,26 @@ export const useRuntimeStore = defineStore('runtime', () => {
     }
   }
 
+  function startPolling() {
+    if (pollTimer !== null) return
+    pollTimer = window.setInterval(() => {
+      refresh()
+    }, POLL_INTERVAL_MS)
+  }
+
+  function stopPolling() {
+    if (pollTimer !== null) {
+      window.clearInterval(pollTimer)
+      pollTimer = null
+    }
+  }
+
   function connect() {
     const token = tokenStore.get()
     if (socket || !token) return
     closedManually = false
     clearReconnectTimer()
+    startPolling()
 
     socket = new WebSocket(buildEventURL(token))
     socket.onopen = () => {
@@ -172,6 +202,7 @@ export const useRuntimeStore = defineStore('runtime', () => {
   function disconnect() {
     closedManually = true
     clearReconnectTimer()
+    stopPolling()
     connected.value = false
     if (socket) {
       socket.close()
@@ -183,6 +214,11 @@ export const useRuntimeStore = defineStore('runtime', () => {
     return tunnelStatusMap.value[tunnelKey(client, tunnel)] ?? null
   }
 
+  function onLog(fn: (event: EventMessage) => void) {
+    logListeners.add(fn)
+    return () => logListeners.delete(fn)
+  }
+
   return {
     serverStats,
     tunnels,
@@ -192,6 +228,7 @@ export const useRuntimeStore = defineStore('runtime', () => {
     refresh,
     connect,
     disconnect,
-    tunnelStatus
+    tunnelStatus,
+    onLog
   }
 })

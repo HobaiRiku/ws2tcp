@@ -91,4 +91,15 @@ export type EventMessage = {
   data?: Record<string, unknown>
 }
 
+export type LogRecord = {
+  time: string
+  level: string
+  message: string
+  attrs?: Record<string, unknown>
+}
+
+export type LogRecentResponse = {
+  records: LogRecord[]
+}
+
 export type ConfigDocument = Record<string, unknown>

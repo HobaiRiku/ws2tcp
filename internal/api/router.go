@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 
 	eventws "websocket2Tcp/internal/api/ws"
 	"websocket2Tcp/internal/config"
+	applog "websocket2Tcp/internal/log"
 	"websocket2Tcp/internal/services"
 	"websocket2Tcp/internal/services/events"
 	"websocket2Tcp/internal/version"
@@ -30,6 +32,7 @@ type Options struct {
 	Runtime       *services.Runtime
 	Auth          *services.AuthService
 	Events        *events.Bus
+	LogTap        *applog.Tap
 	RequireAuth   bool
 	Logger        *slog.Logger
 	ServerControl ServerControl
@@ -525,6 +528,17 @@ func NewRouter(opts Options) *gin.Engine {
 	api.GET("/events/stream", readOnly, eventws.StreamHandler(opts.Events))
 	api.GET("/events/ws", readOnly, eventws.WebSocketHandler(opts.Events))
 
+	api.GET("/logs/recent", readOnly, func(c *gin.Context) {
+		if opts.LogTap == nil {
+			c.JSON(http.StatusOK, gin.H{"records": []applog.Record{}})
+			return
+		}
+		match := buildLogFilter(c)
+		limit := parseLimit(c.Query("limit"), 200, 2000)
+		records := opts.LogTap.Recent(match, limit)
+		c.JSON(http.StatusOK, gin.H{"records": records})
+	})
+
 	return router
 }
 
@@ -687,6 +701,77 @@ func authorize(opts Options, scopes ...string) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// buildLogFilter parses ?attr=key:value (repeatable) into an AND filter
+// over the record's flattened attribute map. Convenience aliases ?client=,
+// ?tunnel=, and ?level= are also supported.
+func buildLogFilter(c *gin.Context) func(applog.Record) bool {
+	type pair struct{ key, value string }
+	var want []pair
+	for _, raw := range c.QueryArray("attr") {
+		idx := strings.Index(raw, ":")
+		if idx <= 0 {
+			continue
+		}
+		want = append(want, pair{raw[:idx], raw[idx+1:]})
+	}
+	aliases := map[string]string{
+		"client":    "client",
+		"client_id": "client_id",
+		"tunnel":    "tunnel",
+		"component": "component",
+	}
+	for q, k := range aliases {
+		if v := strings.TrimSpace(c.Query(q)); v != "" {
+			want = append(want, pair{k, v})
+		}
+	}
+	level := strings.ToUpper(strings.TrimSpace(c.Query("level")))
+	if len(want) == 0 && level == "" {
+		return nil
+	}
+	return func(rec applog.Record) bool {
+		if level != "" && !strings.HasPrefix(strings.ToUpper(rec.Level), level) {
+			return false
+		}
+		for _, p := range want {
+			got, ok := rec.Attrs[p.key]
+			if !ok {
+				return false
+			}
+			if asString(got) != p.value {
+				return false
+			}
+		}
+		return true
+	}
+}
+
+func asString(v any) string {
+	switch x := v.(type) {
+	case string:
+		return x
+	case fmt.Stringer:
+		return x.String()
+	case nil:
+		return ""
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+func parseLimit(raw string, def, max int) int {
+	if raw == "" {
+		return def
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return def
+	}
+	if n > max {
+		return max
+	}
+	return n
 }
 
 func bearerToken(header string) string {

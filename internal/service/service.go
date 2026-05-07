@@ -185,7 +185,7 @@ func loadOptions(home string, console bool) (app.Options, io.Closer, error) {
 		}
 	}
 
-	logger, closer, err := log.Init(log.Options{
+	logger, tap, closer, err := log.Init(log.Options{
 		Level:   cfg.App.LogLevel,
 		File:    p.LogFile(),
 		Console: console,
@@ -198,6 +198,7 @@ func loadOptions(home string, console bool) (app.Options, io.Closer, error) {
 		Paths:  p,
 		Config: cfg,
 		Logger: logger,
+		LogTap: tap,
 	}, closer, nil
 }
 

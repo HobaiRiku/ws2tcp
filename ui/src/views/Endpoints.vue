@@ -5,6 +5,7 @@ import type { Endpoint } from '@/api/types'
 import { eventChecked } from '@/utils/forms'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import Modal from '@/components/Modal.vue'
 import IconBtn from '@/components/IconBtn.vue'
 import { useI18n } from 'vue-i18n'
@@ -159,6 +160,7 @@ async function removeEndpoint(name: string) {
 onMounted(() => {
   load()
 })
+useAutoRefresh(load, 5000)
 </script>
 
 <template>

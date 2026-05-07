@@ -6,8 +6,10 @@ import { useRuntimeStore } from '@/stores/runtime'
 import { eventChecked } from '@/utils/forms'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import Modal from '@/components/Modal.vue'
 import IconBtn from '@/components/IconBtn.vue'
+import LogViewer from '@/components/LogViewer.vue'
 import { useI18n } from 'vue-i18n'
 import {
   buildServerConfigEnvelope,
@@ -39,6 +41,23 @@ const settingsDialog = ref<{ open: boolean; form: ServerSettings | null }>({
   open: false,
   form: null
 })
+
+// 日志 viewer 当前的过滤条件; null 表示未打开.
+const logViewer = ref<{ title: string; filters: Record<string, string> } | null>(null)
+
+function openServerLogs() {
+  logViewer.value = {
+    title: t('logs.serverTitle'),
+    filters: { component: 'server' }
+  }
+}
+
+function openClientLogs(id: string) {
+  logViewer.value = {
+    title: t('logs.clientTitle', { id }),
+    filters: { client_id: id }
+  }
+}
 
 function aclToText(acl: ACLRule[]) {
   return acl.map(rule => `${rule.cidr} ${rule.ports.join(',') || '*'}`).join('\n')
@@ -217,6 +236,7 @@ onMounted(() => {
   runtime.refresh()
   load()
 })
+useAutoRefresh(load, 5000)
 </script>
 
 <template>
@@ -237,6 +257,7 @@ onMounted(() => {
           :title="t('server.copyServerConfig')"
           @click="copyServerConfig"
         />
+        <IconBtn icon="logs" :title="t('logs.serverButton')" @click="openServerLogs" />
         <IconBtn icon="refresh" :title="t('common.refresh')" @click="load" />
         <IconBtn icon="add" variant="primary" :title="t('common.add')" @click="openCreateClient" />
       </div>
@@ -318,6 +339,7 @@ onMounted(() => {
           <td class="acl-cell">{{ client.acl.length }}</td>
           <td class="col-actions">
             <div class="row-actions">
+              <IconBtn icon="logs" :title="t('logs.clientButton')" @click="openClientLogs(client.id)" />
               <IconBtn icon="edit" :title="t('common.edit')" @click="openEditClient(client)" />
               <IconBtn
                 icon="delete"
@@ -442,5 +464,13 @@ onMounted(() => {
         </fluent-button>
       </template>
     </Modal>
+
+    <LogViewer
+      v-if="logViewer"
+      :open="!!logViewer"
+      :title="logViewer.title"
+      :filters="logViewer.filters"
+      @close="logViewer = null"
+    />
   </section>
 </template>

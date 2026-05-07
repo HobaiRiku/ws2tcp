@@ -5,8 +5,10 @@ import type { ClientProfile, Endpoint, Tunnel } from '@/api/types'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import Modal from '@/components/Modal.vue'
 import IconBtn from '@/components/IconBtn.vue'
+import LogViewer from '@/components/LogViewer.vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -18,7 +20,7 @@ const profiles = ref<ClientProfile[]>([])
 const endpoints = ref<Endpoint[]>([])
 const hiddenInvalidProfiles = ref(0)
 const busy = ref(false)
-// 哪些 profile 行处于展开状态; 默认全收起.
+// 哪些 profile 行处于展开状态; 默认全部展开 (新加载的也默认展开).
 const expanded = reactive<Record<string, boolean>>({})
 
 type ProfileForm = { name: string; endpoint: string; client_id: string; client_secret: string }
@@ -40,6 +42,22 @@ function emptyTunnel(): Tunnel {
   return { name: '', listen: '127.0.0.1:0', target_host: '', target_port: 22 }
 }
 
+const logViewer = ref<{ title: string; filters: Record<string, string> } | null>(null)
+
+function openProfileLogs(name: string) {
+  logViewer.value = {
+    title: t('logs.profileTitle', { name }),
+    filters: { client: name }
+  }
+}
+
+function openTunnelLogs(profile: string, tunnel: string) {
+  logViewer.value = {
+    title: t('logs.tunnelTitle', { profile, tunnel }),
+    filters: { client: profile, tunnel }
+  }
+}
+
 async function load() {
   const [pErr, pData] = await api.get<ClientProfile[]>('/api/client/profiles')
   if (pErr) return toast.error(pErr.message)
@@ -55,6 +73,10 @@ async function load() {
   hiddenInvalidProfiles.value = (pData?.length ?? 0) - next.length
   profiles.value = next
   endpoints.value = (eData ?? []).filter(item => item.name?.trim())
+  // 新出现的 profile 默认展开; 已有的保持用户当前的状态 (展开/收起).
+  for (const item of next) {
+    if (!(item.name in expanded)) expanded[item.name] = true
+  }
 }
 
 function toggleExpand(name: string) {
@@ -187,6 +209,7 @@ onMounted(() => {
   runtime.refresh()
   load()
 })
+useAutoRefresh(load, 5000)
 </script>
 
 <template>
@@ -231,6 +254,7 @@ onMounted(() => {
             <td>{{ profile.tunnels.length }}</td>
             <td class="col-actions">
               <div class="row-actions" @click.stop>
+                <IconBtn icon="logs" :title="t('logs.profileButton')" @click="openProfileLogs(profile.name)" />
                 <IconBtn icon="edit" :title="t('common.edit')" @click="openEditProfile(profile)" />
                 <IconBtn
                   icon="delete"
@@ -283,6 +307,11 @@ onMounted(() => {
                     <td>{{ runtime.tunnelStatus(profile.name, tunnel.name)?.active_connections ?? 0 }}</td>
                     <td class="col-actions">
                       <div class="row-actions">
+                        <IconBtn
+                          icon="logs"
+                          :title="t('logs.tunnelButton')"
+                          @click="openTunnelLogs(profile.name, tunnel.name)"
+                        />
                         <IconBtn icon="edit" :title="t('common.edit')" @click="openEditTunnel(profile.name, tunnel)" />
                         <IconBtn
                           icon="delete"
@@ -385,5 +414,13 @@ onMounted(() => {
         </fluent-button>
       </template>
     </Modal>
+
+    <LogViewer
+      v-if="logViewer"
+      :open="!!logViewer"
+      :title="logViewer.title"
+      :filters="logViewer.filters"
+      @close="logViewer = null"
+    />
   </section>
 </template>

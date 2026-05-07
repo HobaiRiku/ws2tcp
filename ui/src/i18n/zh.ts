@@ -192,5 +192,19 @@ export default {
     summaryAny: '任意',
     summaryShowKey: '显示',
     summaryHideKey: '隐藏'
+  },
+  logs: {
+    subtitle: '历史从内存环形缓冲读取, 新日志通过事件流实时推送',
+    tailing: '自动滚动',
+    paused: '已暂停 (滚动到底部继续)',
+    empty: '暂无日志',
+    serverButton: 'Server 进程日志',
+    serverTitle: 'Server 进程日志',
+    clientButton: 'Client 日志',
+    clientTitle: 'Client {id} 日志',
+    profileButton: 'Profile 日志',
+    profileTitle: 'Profile {name} 日志',
+    tunnelButton: 'Tunnel 日志',
+    tunnelTitle: 'Tunnel {profile} / {tunnel}'
   }
 }

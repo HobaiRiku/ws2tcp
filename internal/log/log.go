@@ -23,9 +23,10 @@ type Options struct {
 	Console bool
 }
 
-// Init builds an *slog.Logger and returns a Closer that owns the log file
-// (so the caller can close it during shutdown).
-func Init(opts Options) (*slog.Logger, io.Closer, error) {
+// Init builds an *slog.Logger and returns the in-memory Tap (for the
+// management API) plus a Closer that owns the log file (so the caller
+// can close it during shutdown).
+func Init(opts Options) (*slog.Logger, *Tap, io.Closer, error) {
 	lvl := parseLevel(opts.Level)
 	hopts := &slog.HandlerOptions{Level: lvl}
 
@@ -36,11 +37,11 @@ func Init(opts Options) (*slog.Logger, io.Closer, error) {
 
 	if opts.File != "" {
 		if err := os.MkdirAll(filepath.Dir(opts.File), 0o700); err != nil {
-			return nil, nil, fmt.Errorf("mkdir log dir: %w", err)
+			return nil, nil, nil, fmt.Errorf("mkdir log dir: %w", err)
 		}
 		f, err := os.OpenFile(opts.File, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 		if err != nil {
-			return nil, nil, fmt.Errorf("open %s: %w", opts.File, err)
+			return nil, nil, nil, fmt.Errorf("open %s: %w", opts.File, err)
 		}
 		handlers = append(handlers, slog.NewJSONHandler(f, hopts))
 		closer = f
@@ -49,7 +50,10 @@ func Init(opts Options) (*slog.Logger, io.Closer, error) {
 		handlers = append(handlers, slog.NewTextHandler(os.Stderr, hopts))
 	}
 
-	return slog.New(fanoutHandler(handlers)), closer, nil
+	tap := NewTap(500)
+	handlers = append(handlers, tap)
+
+	return slog.New(fanoutHandler(handlers)), tap, closer, nil
 }
 
 func parseLevel(s string) slog.Level {

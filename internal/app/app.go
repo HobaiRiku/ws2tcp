@@ -18,6 +18,7 @@ import (
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/core/client"
 	"websocket2Tcp/internal/core/server"
+	applog "websocket2Tcp/internal/log"
 	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/services"
 	"websocket2Tcp/internal/services/events"
@@ -29,6 +30,7 @@ type Options struct {
 	Paths  paths.Paths
 	Config *config.Config
 	Logger *slog.Logger
+	LogTap *applog.Tap
 }
 
 // Run starts the configured subsystems and blocks until ctx is cancelled,
@@ -51,6 +53,20 @@ func Run(ctx context.Context, opts Options) error {
 	}
 	runtime := services.NewRuntime()
 	eventBus := events.NewBus()
+
+	if opts.LogTap != nil {
+		opts.LogTap.SetPublisher(func(rec applog.Record) {
+			eventBus.Publish(events.Message{
+				Topic: "log",
+				Time:  rec.Time,
+				Data: map[string]any{
+					"level":   rec.Level,
+					"message": rec.Message,
+					"attrs":   rec.Attrs,
+				},
+			})
+		})
+	}
 
 	supervisor := newServerSupervisor(opts, registry, runtime, eventBus)
 
@@ -104,6 +120,7 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 		Runtime:       rt,
 		Auth:          auth,
 		Events:        bus,
+		LogTap:        opts.LogTap,
 		RequireAuth:   opts.Config.App.HTTPAuth,
 		Logger:        opts.Logger.With("component", "api"),
 		ServerControl: supervisor,

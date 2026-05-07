@@ -192,5 +192,19 @@ export default {
     summaryAny: 'any',
     summaryShowKey: 'show',
     summaryHideKey: 'hide'
+  },
+  logs: {
+    subtitle: 'History comes from the in-memory ring buffer; new lines stream in live',
+    tailing: 'Tailing',
+    paused: 'Paused (scroll to bottom to resume)',
+    empty: 'No log records',
+    serverButton: 'Server logs',
+    serverTitle: 'Server process logs',
+    clientButton: 'Client logs',
+    clientTitle: 'Client {id} logs',
+    profileButton: 'Profile logs',
+    profileTitle: 'Profile {name} logs',
+    tunnelButton: 'Tunnel logs',
+    tunnelTitle: 'Tunnel {profile} / {tunnel}'
   }
 }
