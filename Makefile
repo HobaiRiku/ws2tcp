@@ -38,7 +38,7 @@ PKG := ./...
 # 前端统一使用 pnpm. corepack 自动 pin 到 ui/package.json 的 packageManager.
 PNPM ?= pnpm
 
-.PHONY: all build run dev tidy fmt vet test test-unit test-service test-e2e \
+.PHONY: all build run dev tidy fmt vet test test-unit test-e2e \
 	ui ui-install ui-dev ui-build ui-clean ui-lint ui-lint-fix ui-format ui-typecheck \
 	web web-install web-dev web-build web-clean web-lint web-lint-fix web-format web-typecheck \
 	clean release print-version
@@ -73,13 +73,11 @@ test: test-unit
 test-unit:
 	WS2TCP_HOME=$(LOCAL_HOME) go test $(PKG)
 
-test-service:
-	@mkdir -p $(LOCAL_HOME)
-	@echo "TODO: service-layer integration tests"
-
+# 端到端测试: 真正起一份 ws2tcp server + client + tunnel, 通过本地 echo
+# target 验证字节往返. 每个用例自带 t.TempDir() 当 WS2TCP_HOME, 跑完
+# Go 测试框架自动清理. 默认 (`make test`) 不跑, 用 -tags e2e 显式启用.
 test-e2e:
-	@mkdir -p $(LOCAL_HOME)
-	@echo "TODO: Go<->Node interop tests under tests/interop/"
+	go test -tags e2e -count=1 -timeout 60s ./internal/e2e/...
 
 # ---- UI --------------------------------------------------------------------
 
