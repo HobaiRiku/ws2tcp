@@ -544,7 +544,24 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  flex-wrap: wrap;
+  /* 工具栏不允许换行 */
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.page-toolbar > h1,
+.page-toolbar > h2,
+.page-toolbar .page-title,
+.page-toolbar .sub-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.nowrap,
+.toolbar-actions > * {
+  white-space: nowrap;
 }
 
 .page-title {
@@ -575,7 +592,74 @@ a {
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+/* ===== Icon button ===== */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0;
+  transition: 120ms ease;
+  flex-shrink: 0;
+}
+
+.icon-btn-md {
+  width: 36px;
+  height: 36px;
+}
+
+.icon-btn-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.icon-btn svg {
+  width: 60%;
+  height: 60%;
+}
+
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: transparent;
+}
+
+.icon-btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  color: #fff;
+}
+
+.icon-btn-danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.locale-select {
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
 }
 
 .col-actions {
@@ -596,6 +680,12 @@ a {
 
 .row-actions fluent-button {
   width: auto;
+}
+
+/* row-level icon buttons render as 28px circles */
+.row-actions .icon-btn-md {
+  width: 32px;
+  height: 32px;
 }
 
 fluent-button.danger {
@@ -725,6 +815,77 @@ fluent-button.danger {
 .confirm-msg {
   margin: 0;
   color: var(--text);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  word-break: break-all;
+}
+
+.paste-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--surface-muted);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.paste-bar .muted {
+  font-size: 0.88rem;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+/* expandable rows */
+.table.expandable .row-clickable {
+  cursor: pointer;
+}
+
+.table.expandable .row-clickable:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.col-toggle {
+  width: 40px;
+  text-align: center;
+}
+
+.row-detail > td {
+  background: var(--surface-muted);
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.detail-title {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.sub-table {
+  margin-top: 0;
+}
+
+.sub-table th {
+  font-size: 0.78rem;
+  padding: 0.6rem 0.45rem;
+}
+
+.sub-table td {
+  padding: 0.6rem 0.45rem;
 }
 
 .confirm-danger {

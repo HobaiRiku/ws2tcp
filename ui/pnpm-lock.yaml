@@ -17,6 +17,9 @@ importers:
       vue:
         specifier: ^3.5.33
         version: 3.5.33(typescript@6.0.3)
+      vue-i18n:
+        specifier: ^11.4.1
+        version: 11.4.1(vue@3.5.33(typescript@6.0.3))
       vue-router:
         specifier: ^5.0.6
         version: 5.0.6(@vue/compiler-sfc@3.5.33)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.33(typescript@6.0.3)))(vue@3.5.33(typescript@6.0.3))
@@ -136,6 +139,22 @@ packages:
   '@humanwhocodes/retry@0.4.3':
     resolution: {integrity: sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ==}
     engines: {node: '>=18.18'}
+
+  '@intlify/core-base@11.4.1':
+    resolution: {integrity: sha512-0THDSKJEmzgWEgTTjiD7Ag+N9P2U3UWbfhj0u9RghwUJIM/TOkRvChWO6vVBVYEbKZgECNUpV7cI8If3c+N0fQ==}
+    engines: {node: '>= 16'}
+
+  '@intlify/devtools-types@11.4.1':
+    resolution: {integrity: sha512-os/MvXEQ4Y13yQx06vU1CXrTSFJxCZR53PfLWnkvPWXfAlvP0k+4rzd7RVqLr0VisghBs4TIp7hF7FKylU/n3w==}
+    engines: {node: '>= 16'}
+
+  '@intlify/message-compiler@11.4.1':
+    resolution: {integrity: sha512-0Ub3OpBmStbbgRwBMqivGxnHy63dwxLv1fLcP9yW/jFIXGQkAcKJ69ttYh+aTKaGObMHPw48hqE0hpitjnM8og==}
+    engines: {node: '>= 16'}
+
+  '@intlify/shared@11.4.1':
+    resolution: {integrity: sha512-LgjRhFnh+445sq7s2O5gAGwbYaBfAYeoJWMmCL1RY04iqi2aI6p5RqKVqMV2fWlOBLGN7pNHyl0VZYWzLIy9ng==}
+    engines: {node: '>= 16'}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -395,6 +414,9 @@ packages:
 
   '@vue/compiler-ssr@3.5.33':
     resolution: {integrity: sha512-IErjYdnj1qIupG5xxiVIYiiRvDhGWV4zuh/RCrwfYpuL+HWQzeU6lCk/nF9r7olWMnjKxCAkOctT2qFWFkzb1A==}
+
+  '@vue/devtools-api@6.6.4':
+    resolution: {integrity: sha512-sGhTPMuXqZ1rVOk32RylztWkfXTRhuS7vgAKv0zjqk8gbsHkJ7xfFf+jbySxt7tWObEJwyKaHMikV/WGDiQm8g==}
 
   '@vue/devtools-api@7.7.9':
     resolution: {integrity: sha512-kIE8wvwlcZ6TJTbNeU2HQNtaxLx3a84aotTITUuL/4bzfPxzajGBOoqjMhwZJ8L9qFYDU/lAYMEEm11dnZOD6g==}
@@ -1119,6 +1141,12 @@ packages:
     peerDependencies:
       eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
 
+  vue-i18n@11.4.1:
+    resolution: {integrity: sha512-qgTF8RiHTYyCE6CzcNZyRXpH4ZfiWwKxyjIhbC0cOr1JpwQBxUvLPemL9t5jLos/Nl744gAdgNRsF7RW1yVjnw==}
+    engines: {node: '>= 16'}
+    peerDependencies:
+      vue: ^3.0.0
+
   vue-router@5.0.6:
     resolution: {integrity: sha512-9+kmUTGbKMyW9Asoy98IXXYIzrTMT7JDAdpDDeEkorHvybpUvBI2wsrSM5jFOXrFydpzRFJ9vAh+80DN2PGu9w==}
     peerDependencies:
@@ -1265,6 +1293,24 @@ snapshots:
   '@humanwhocodes/module-importer@1.0.1': {}
 
   '@humanwhocodes/retry@0.4.3': {}
+
+  '@intlify/core-base@11.4.1':
+    dependencies:
+      '@intlify/devtools-types': 11.4.1
+      '@intlify/message-compiler': 11.4.1
+      '@intlify/shared': 11.4.1
+
+  '@intlify/devtools-types@11.4.1':
+    dependencies:
+      '@intlify/core-base': 11.4.1
+      '@intlify/shared': 11.4.1
+
+  '@intlify/message-compiler@11.4.1':
+    dependencies:
+      '@intlify/shared': 11.4.1
+      source-map-js: 1.2.1
+
+  '@intlify/shared@11.4.1': {}
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
@@ -1539,6 +1585,8 @@ snapshots:
     dependencies:
       '@vue/compiler-dom': 3.5.33
       '@vue/shared': 3.5.33
+
+  '@vue/devtools-api@6.6.4': {}
 
   '@vue/devtools-api@7.7.9':
     dependencies:
@@ -2203,6 +2251,14 @@ snapshots:
       semver: 7.7.4
     transitivePeerDependencies:
       - supports-color
+
+  vue-i18n@11.4.1(vue@3.5.33(typescript@6.0.3)):
+    dependencies:
+      '@intlify/core-base': 11.4.1
+      '@intlify/devtools-types': 11.4.1
+      '@intlify/shared': 11.4.1
+      '@vue/devtools-api': 6.6.4
+      vue: 3.5.33(typescript@6.0.3)
 
   vue-router@5.0.6(@vue/compiler-sfc@3.5.33)(pinia@3.0.4(typescript@6.0.3)(vue@3.5.33(typescript@6.0.3)))(vue@3.5.33(typescript@6.0.3)):
     dependencies:

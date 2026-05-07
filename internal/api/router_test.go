@@ -153,8 +153,9 @@ func TestClientEndpoints(t *testing.T) {
 	if rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"name":"prod"`) {
 		t.Fatalf("unexpected profile response: %d %s", rr.Code, rr.Body.String())
 	}
-	if strings.Contains(rr.Body.String(), `"client_secret":"s1"`) {
-		t.Fatalf("client secret leaked: %s", rr.Body.String())
+	// 内部管理面板的明文回显是有意为之, profile 接口现在会带 client_secret.
+	if !strings.Contains(rr.Body.String(), `"client_secret":"s1"`) {
+		t.Fatalf("expected client_secret echoed back, got: %s", rr.Body.String())
 	}
 
 	runtime.SetTunnelState("prod", "db", "edge", "127.0.0.1:3306", "listening", "")
@@ -202,8 +203,9 @@ func TestServerClientEndpointsAndStats(t *testing.T) {
 	if rr.Code != http.StatusCreated {
 		t.Fatalf("unexpected client post response: %d %s", rr.Code, rr.Body.String())
 	}
-	if strings.Contains(rr.Body.String(), `"secret":"`) {
-		t.Fatalf("server secret leaked: %s", rr.Body.String())
+	// server identity secret 现在也直接回显 (内部管理面板).
+	if !strings.Contains(rr.Body.String(), `"secret":"s2"`) {
+		t.Fatalf("expected server secret echoed back, got: %s", rr.Body.String())
 	}
 
 	rr = performJSON(t, router, http.MethodPatch, "/api/server/clients/u2", token, clientPatchRequest{

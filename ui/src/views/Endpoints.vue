@@ -6,6 +6,13 @@ import { eventChecked } from '@/utils/forms'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import Modal from '@/components/Modal.vue'
+import IconBtn from '@/components/IconBtn.vue'
+import { useI18n } from 'vue-i18n'
+import {
+  parseServerConfigEnvelope,
+  readClipboardText,
+  generateAesKey32
+} from '@/utils/clipboard'
 
 type EndpointForm = Endpoint & {
   ip: string
@@ -13,6 +20,7 @@ type EndpointForm = Endpoint & {
   ssl_reject_unauthorized: boolean
 }
 
+const { t } = useI18n()
 const toast = useToast()
 const confirm = useConfirm()
 
@@ -48,10 +56,21 @@ async function load() {
   list.value = next
 }
 
-function openCreate() {
+async function openCreate() {
   editingName.value = ''
   form.value = emptyForm()
   dialogOpen.value = true
+  // 如果剪贴板里有 server 配置 envelope, 自动预填.
+  const text = await readClipboardText()
+  const env = text ? parseServerConfigEnvelope(text) : null
+  if (env) {
+    form.value.host = env.host
+    form.value.port = env.port
+    form.value.path = env.path
+    form.value.wss = env.wss
+    form.value.aes_key = env.aes_key
+    toast.info(t('endpoints.pastedFromServer'))
+  }
 }
 
 function openEdit(endpoint: Endpoint) {
@@ -69,11 +88,30 @@ function openEdit(endpoint: Endpoint) {
   dialogOpen.value = true
 }
 
+async function pasteFromClipboard() {
+  const text = await readClipboardText()
+  if (!text) {
+    toast.error(t('toast.pasteFailed'))
+    return
+  }
+  const env = parseServerConfigEnvelope(text)
+  if (!env) {
+    toast.error(t('toast.pasteEmpty'))
+    return
+  }
+  form.value.host = env.host
+  form.value.port = env.port
+  form.value.path = env.path
+  form.value.wss = env.wss
+  form.value.aes_key = env.aes_key
+  toast.success(t('toast.pastedFromClipboard'))
+}
+
 async function save() {
   busy.value = true
   if (!editingName.value && form.value.aes_key.trim().length !== 32) {
     busy.value = false
-    toast.error('新建 endpoint 需要 32 字节的 AES key')
+    toast.error(t('endpoints.aesKeyTooShort'))
     return
   }
 
@@ -90,7 +128,7 @@ async function save() {
     const [err] = await api.patch(`/api/client/endpoints/${encodeURIComponent(editingName.value)}`, payload)
     busy.value = false
     if (err) return toast.error(err.message)
-    toast.success(`已更新 endpoint "${editingName.value}"`)
+    toast.success(t('endpoints.saved', { name: editingName.value }))
     dialogOpen.value = false
     await load()
     return
@@ -102,22 +140,22 @@ async function save() {
   })
   busy.value = false
   if (err) return toast.error(err.message)
-  toast.success(`已创建 endpoint "${form.value.name}"`)
+  toast.success(t('endpoints.saved', { name: form.value.name }))
   dialogOpen.value = false
   await load()
 }
 
 async function removeEndpoint(name: string) {
   const ok = await confirm.ask({
-    title: '删除 endpoint',
-    message: `确定要删除 endpoint "${name}" 吗？`,
+    title: t('endpoints.deleteTitle'),
+    message: t('endpoints.confirmDelete', { name }),
     danger: true,
-    confirmText: '删除'
+    confirmText: t('common.delete')
   })
   if (!ok) return
   const [err] = await api.delete(`/api/client/endpoints/${encodeURIComponent(name)}`)
   if (err) return toast.error(err.message)
-  toast.success(`已删除 endpoint "${name}"`)
+  toast.success(t('endpoints.deleted', { name }))
   await load()
 }
 
@@ -129,27 +167,27 @@ onMounted(() => {
 <template>
   <section class="page">
     <div class="page-toolbar">
-      <h1 class="page-title">Endpoints</h1>
+      <h1 class="page-title">{{ t('endpoints.title') }}</h1>
       <div class="toolbar-actions">
-        <fluent-button appearance="stealth" @click="load">刷新</fluent-button>
-        <fluent-button appearance="accent" @click="openCreate">新增 endpoint</fluent-button>
+        <IconBtn icon="refresh" :title="t('common.refresh')" @click="load" />
+        <IconBtn icon="add" variant="primary" :title="t('common.add')" @click="openCreate" />
       </div>
     </div>
 
     <div v-if="hiddenInvalidCount" class="banner error">
-      已隐藏 {{ hiddenInvalidCount }} 条名称为空的无效 endpoint。
+      {{ t('endpoints.invalidHidden', { count: hiddenInvalidCount }) }}
     </div>
 
     <table class="table">
       <thead>
         <tr>
-          <th>名称</th>
-          <th>Host</th>
-          <th>IP</th>
-          <th>端口</th>
-          <th>路径</th>
-          <th>WSS</th>
-          <th>校验证书</th>
+          <th>{{ t('endpoints.columnName') }}</th>
+          <th>{{ t('endpoints.columnHost') }}</th>
+          <th>{{ t('endpoints.columnIP') }}</th>
+          <th>{{ t('endpoints.columnPort') }}</th>
+          <th>{{ t('endpoints.columnPath') }}</th>
+          <th>{{ t('endpoints.columnWss') }}</th>
+          <th>{{ t('endpoints.columnVerifyTLS') }}</th>
           <th class="col-actions"></th>
         </tr>
       </thead>
@@ -157,76 +195,96 @@ onMounted(() => {
         <tr v-for="endpoint in list" :key="endpoint.name">
           <td><strong>{{ endpoint.name }}</strong></td>
           <td>{{ endpoint.host }}</td>
-          <td>{{ endpoint.ip || '—' }}</td>
+          <td>{{ endpoint.ip || t('common.no') }}</td>
           <td>{{ endpoint.port }}</td>
           <td>{{ endpoint.path }}</td>
-          <td>{{ endpoint.wss ? '✓' : '—' }}</td>
-          <td>{{ endpoint.ssl_reject_unauthorized ? '✓' : '—' }}</td>
+          <td>{{ endpoint.wss ? t('common.yes') : t('common.no') }}</td>
+          <td>{{ endpoint.ssl_reject_unauthorized ? t('common.yes') : t('common.no') }}</td>
           <td class="col-actions">
             <div class="row-actions">
-              <fluent-button appearance="stealth" @click="openEdit(endpoint)">编辑</fluent-button>
-              <fluent-button appearance="stealth" class="danger" @click="removeEndpoint(endpoint.name)">删除</fluent-button>
+              <IconBtn icon="edit" :title="t('common.edit')" @click="openEdit(endpoint)" />
+              <IconBtn
+                icon="delete"
+                variant="danger"
+                :title="t('common.delete')"
+                @click="removeEndpoint(endpoint.name)"
+              />
             </div>
           </td>
         </tr>
         <tr v-if="!list.length">
-          <td colspan="8" class="empty-cell">尚未配置任何 endpoint。</td>
+          <td colspan="8" class="empty-cell">{{ t('endpoints.empty') }}</td>
         </tr>
       </tbody>
     </table>
 
     <Modal
       :open="dialogOpen"
-      :title="editingName ? `编辑 endpoint：${editingName}` : '新增 endpoint'"
+      :title="editingName ? t('endpoints.editTitle', { name: editingName }) : t('endpoints.addTitle')"
       width="640px"
       @close="dialogOpen = false"
     >
+      <div v-if="!editingName" class="paste-bar">
+        <span class="muted">{{ t('endpoints.pasteServerConfig') }}</span>
+        <IconBtn icon="paste" size="sm" :title="t('common.paste')" @click="pasteFromClipboard" />
+      </div>
+
       <div class="form-grid two-up">
         <label>
-          <span class="field-label">名称</span>
+          <span class="field-label">{{ t('endpoints.fieldName') }}</span>
           <input v-model="form.name" class="text-input" :disabled="!!editingName" />
         </label>
         <label>
-          <span class="field-label">Host / SNI</span>
+          <span class="field-label">{{ t('endpoints.fieldHost') }}</span>
           <input v-model="form.host" class="text-input" />
         </label>
         <label>
-          <span class="field-label">IP override</span>
+          <span class="field-label">{{ t('endpoints.fieldIP') }}</span>
           <input v-model="form.ip" class="text-input" />
         </label>
         <label>
-          <span class="field-label">端口</span>
+          <span class="field-label">{{ t('endpoints.fieldPort') }}</span>
           <input v-model.number="form.port" class="text-input" type="number" />
         </label>
         <label>
-          <span class="field-label">路径</span>
+          <span class="field-label">{{ t('endpoints.fieldPath') }}</span>
           <input v-model="form.path" class="text-input" />
         </label>
         <label>
-          <span class="field-label">AES key</span>
-          <input
-            v-model="form.aes_key"
-            class="text-input"
-            type="password"
-            :placeholder="editingName ? '留空则保留当前 key' : '32 字节 AES key'"
-          />
+          <span class="field-label">{{ t('endpoints.fieldAesKey') }}</span>
+          <div class="inline-group">
+            <input
+              v-model="form.aes_key"
+              class="text-input"
+              type="text"
+              :placeholder="editingName ? t('endpoints.aesKeyPlaceholderEdit') : t('endpoints.aesKeyPlaceholderNew')"
+            />
+            <IconBtn
+              icon="generate"
+              size="sm"
+              :title="t('common.generate')"
+              @click="form.aes_key = generateAesKey32()"
+            />
+          </div>
         </label>
       </div>
 
       <div class="checkbox-row fluent-switches">
-        <fluent-switch :checked="form.wss" @change="form.wss = eventChecked($event)">使用 WSS</fluent-switch>
+        <fluent-switch :checked="form.wss" @change="form.wss = eventChecked($event)">
+          {{ t('endpoints.fieldWss') }}
+        </fluent-switch>
         <fluent-switch
           :checked="form.ssl_reject_unauthorized"
           @change="form.ssl_reject_unauthorized = eventChecked($event)"
         >
-          校验服务器 TLS 证书
+          {{ t('endpoints.fieldVerifyTLS') }}
         </fluent-switch>
       </div>
 
       <template #footer>
-        <fluent-button appearance="stealth" @click="dialogOpen = false">取消</fluent-button>
+        <fluent-button appearance="stealth" @click="dialogOpen = false">{{ t('common.cancel') }}</fluent-button>
         <fluent-button appearance="accent" :disabled="busy" @click="save">
-          {{ busy ? '保存中…' : '保存' }}
+          {{ busy ? t('common.saving') : t('common.save') }}
         </fluent-button>
       </template>
     </Modal>

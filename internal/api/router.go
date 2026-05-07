@@ -17,15 +17,22 @@ import (
 	"websocket2Tcp/internal/version"
 )
 
+// ServerControl lets the API trigger an in-process restart of the ws2tcp
+// server subsystem after transport-affecting config changes.
+type ServerControl interface {
+	Restart()
+}
+
 // Options carries the dependencies needed to build the management router.
 // Auth middleware can be injected later; if Protect is nil, routes are open.
 type Options struct {
-	Registry    *services.Registry
-	Runtime     *services.Runtime
-	Auth        *services.AuthService
-	Events      *events.Bus
-	RequireAuth bool
-	Logger      *slog.Logger
+	Registry      *services.Registry
+	Runtime       *services.Runtime
+	Auth          *services.AuthService
+	Events        *events.Bus
+	RequireAuth   bool
+	Logger        *slog.Logger
+	ServerControl ServerControl
 }
 
 type errorResponse struct {
@@ -72,12 +79,23 @@ type serverSettingsResponse struct {
 	WSPath        string `json:"ws_path"`
 	WSHost        string `json:"ws_host"`
 	TrustProxy    bool   `json:"trust_proxy"`
+	AESKey        string `json:"aes_key"`
 	UseEncryption bool   `json:"use_encryption"`
 	TLSEnabled    bool   `json:"tls_enabled"`
+	TLSCert       string `json:"tls_cert"`
+	TLSKey        string `json:"tls_key"`
 }
 
 type serverSettingsPatchRequest struct {
-	UseEncryption *bool `json:"use_encryption"`
+	Listen        *string `json:"listen"`
+	WSPath        *string `json:"ws_path"`
+	WSHost        *string `json:"ws_host"`
+	TrustProxy    *bool   `json:"trust_proxy"`
+	AESKey        *string `json:"aes_key"`
+	UseEncryption *bool   `json:"use_encryption"`
+	TLSEnabled    *bool   `json:"tls_enabled"`
+	TLSCert       *string `json:"tls_cert"`
+	TLSKey        *string `json:"tls_key"`
 }
 
 type clientRuntimeResponse struct {
@@ -367,18 +385,67 @@ func NewRouter(opts Options) *gin.Engine {
 			writeError(c, http.StatusBadRequest, "INVALID_JSON", err)
 			return
 		}
-		if req.UseEncryption == nil {
+
+		// Apply each provided field. transportDirty tracks whether any change
+		// actually affects the server's HTTP listener / TLS / handshake AES key
+		// — only those require an in-process restart.
+		type updateOp struct {
+			path string
+			val  string
+		}
+		var ops []updateOp
+		transportDirty := false
+		if req.Listen != nil {
+			ops = append(ops, updateOp{"server.listen", *req.Listen})
+			transportDirty = true
+		}
+		if req.WSPath != nil {
+			ops = append(ops, updateOp{"server.ws_path", *req.WSPath})
+			transportDirty = true
+		}
+		if req.WSHost != nil {
+			ops = append(ops, updateOp{"server.ws_host", *req.WSHost})
+			transportDirty = true
+		}
+		if req.TrustProxy != nil {
+			ops = append(ops, updateOp{"server.trust_proxy", strconv.FormatBool(*req.TrustProxy)})
+		}
+		if req.AESKey != nil {
+			ops = append(ops, updateOp{"server.aes_key", *req.AESKey})
+			transportDirty = true
+		}
+		if req.UseEncryption != nil {
+			ops = append(ops, updateOp{"server.use_encryption", strconv.FormatBool(*req.UseEncryption)})
+		}
+		if req.TLSEnabled != nil {
+			ops = append(ops, updateOp{"server.tls.enabled", strconv.FormatBool(*req.TLSEnabled)})
+			transportDirty = true
+		}
+		if req.TLSCert != nil {
+			ops = append(ops, updateOp{"server.tls.cert", *req.TLSCert})
+			transportDirty = true
+		}
+		if req.TLSKey != nil {
+			ops = append(ops, updateOp{"server.tls.key", *req.TLSKey})
+			transportDirty = true
+		}
+		if len(ops) == 0 {
 			writeError(c, http.StatusBadRequest, "EMPTY_PATCH", errors.New("no server settings provided"))
 			return
 		}
-		if err := opts.Registry.SetConfigValue("server.use_encryption", strconv.FormatBool(*req.UseEncryption)); err != nil {
-			writeError(c, classifyStatus(err), "SET_SERVER_SETTINGS_FAILED", err)
-			return
+		for _, op := range ops {
+			if err := opts.Registry.SetConfigValue(op.path, op.val); err != nil {
+				writeError(c, classifyStatus(err), "SET_SERVER_SETTINGS_FAILED", err)
+				return
+			}
 		}
 		cfg, err := config.Load(opts.Registry.ConfigPath())
 		if err != nil {
 			writeError(c, http.StatusInternalServerError, "CONFIG_LOAD_FAILED", err)
 			return
+		}
+		if transportDirty && opts.ServerControl != nil {
+			opts.ServerControl.Restart()
 		}
 		c.JSON(http.StatusOK, serverSettings(cfg.Server))
 	})
@@ -392,7 +459,8 @@ func NewRouter(opts Options) *gin.Engine {
 			writeError(c, classifyStatus(err), "CREATE_CLIENT_FAILED", err)
 			return
 		}
-		c.JSON(http.StatusCreated, redactIdentity(services.Identity{ID: client.ID}))
+		created, _ := opts.Registry.FindIdentity(client.ID)
+		c.JSON(http.StatusCreated, redactIdentity(created))
 	})
 	api.GET("/server/clients/:id", readOnly, func(c *gin.Context) {
 		client, err := opts.Registry.FindIdentity(c.Param("id"))
@@ -500,9 +568,10 @@ func redactEndpoints(endpoints []config.Endpoint) []config.Endpoint {
 	return out
 }
 
+// 注意: 出于内部管理面板的便利性, 这里不再 redact client_secret. AES key
+// 仍由 redactEndpoint 抹掉, 因为 endpoint 列表的语义不同.
 func redactClientProfile(profile config.ClientProfile) config.ClientProfile {
 	cp := profile
-	cp.ClientSecret = ""
 	cp.Tunnels = append([]config.Tunnel{}, profile.Tunnels...)
 	return cp
 }
@@ -516,9 +585,11 @@ func redactClientProfiles(profiles []config.ClientProfile) []config.ClientProfil
 }
 
 func redactIdentity(identity services.Identity) gin.H {
+	// 内部管理面板, secret 直接回显; AES 等更敏感的信息仍按需 redact.
 	return gin.H{
-		"id":  identity.ID,
-		"acl": identityACL(identity),
+		"id":     identity.ID,
+		"secret": identity.Secret,
+		"acl":    identityACL(identity),
 	}
 }
 
@@ -536,8 +607,11 @@ func serverSettings(cfg config.ServerConfig) serverSettingsResponse {
 		WSPath:        cfg.WSPath,
 		WSHost:        cfg.WSHost,
 		TrustProxy:    cfg.TrustProxy,
+		AESKey:        cfg.AESKey,
 		UseEncryption: cfg.UseEncryption,
 		TLSEnabled:    cfg.TLS.Enabled,
+		TLSCert:       cfg.TLS.Cert,
+		TLSKey:        cfg.TLS.Key,
 	}
 }
 

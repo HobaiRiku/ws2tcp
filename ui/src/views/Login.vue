@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVersionStore } from '@/stores/version'
-import { onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const token = ref('')
 const error = ref('')
 const busy = ref(false)
@@ -21,7 +22,7 @@ async function submit() {
   const ok = await auth.login(token.value)
   busy.value = false
   if (!ok) {
-    error.value = 'Token rejected. Check the value and try again.'
+    error.value = t('login.rejected')
     return
   }
   const next = (route.query.redirect as string) || '/dashboard'
@@ -33,13 +34,20 @@ async function submit() {
   <div class="login-wrap">
     <div class="login-card">
       <div class="page-kicker">ws2tcp</div>
-      <h1>Open the management console</h1>
-      <p class="hint">Use the fixed management token from <code>config.yaml</code>.</p>
+      <h1>{{ t('login.heading') }}</h1>
+      <p class="hint">{{ t('login.hint') }}</p>
       <div v-if="error" class="banner error">{{ error }}</div>
-      <label class="field-label" for="token">Management token</label>
-      <input id="token" v-model="token" class="text-input" type="password" placeholder="Paste token" @keydown.enter="submit" />
+      <label class="field-label" for="token">{{ t('login.tokenLabel') }}</label>
+      <input
+        id="token"
+        v-model="token"
+        class="text-input"
+        type="password"
+        :placeholder="t('login.tokenPlaceholder')"
+        @keydown.enter="submit"
+      />
       <fluent-button appearance="accent" :disabled="busy || !token" @click="submit">
-        {{ busy ? 'Verifying…' : 'Sign in' }}
+        {{ busy ? t('login.verifying') : t('login.signIn') }}
       </fluent-button>
       <p v-if="ver.info" class="login-version">ws2tcp {{ ver.info.version }} · {{ ver.info.commit }}</p>
     </div>

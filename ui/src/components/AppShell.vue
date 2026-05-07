@@ -4,16 +4,20 @@ import { useRuntimeStore } from '@/stores/runtime'
 import { useVersionStore } from '@/stores/version'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { currentLocale, localeOptions, setLocale, type LocaleKey } from '@/i18n'
 
 const auth = useAuthStore()
 const runtime = useRuntimeStore()
 const ver = useVersionStore()
 const router = useRouter()
+const { t } = useI18n()
+
 const tabs = [
-  { to: '/dashboard', label: 'Overview' },
-  { to: '/server', label: 'Server' },
-  { to: '/clients', label: 'Clients' },
-  { to: '/endpoints', label: 'Endpoints' }
+  { to: '/dashboard', key: 'overview' as const },
+  { to: '/server', key: 'server' as const },
+  { to: '/clients', key: 'clients' as const },
+  { to: '/endpoints', key: 'endpoints' as const }
 ]
 
 onMounted(async () => {
@@ -30,25 +34,35 @@ async function logout() {
   auth.logout()
   await router.push('/login')
 }
+
+function switchLocale(event: Event) {
+  const target = event.target as HTMLSelectElement
+  setLocale(target.value as LocaleKey)
+}
 </script>
 
 <template>
   <div class="shell">
     <header class="shell-header">
       <div>
-        <div class="brand-mark">ws2tcp</div>
-        <div class="shell-subtitle">Tunnel manager</div>
+        <div class="brand-mark">{{ t('shell.brand') }}</div>
+        <div class="shell-subtitle">{{ t('shell.subtitle') }}</div>
       </div>
       <div class="shell-meta">
-        <span class="badge" :class="runtime.connected ? 'badge-ok' : 'badge-warn'">
-          {{ runtime.connected ? 'Live stream connected' : 'Live stream reconnecting' }}
+        <span class="badge nowrap" :class="runtime.connected ? 'badge-ok' : 'badge-warn'">
+          {{ runtime.connected ? t('shell.streamConnected') : t('shell.streamReconnecting') }}
         </span>
-        <fluent-button appearance="stealth" @click="logout">Sign out</fluent-button>
+        <select class="locale-select" :value="currentLocale()" @change="switchLocale">
+          <option v-for="opt in localeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
+        <fluent-button appearance="stealth" @click="logout">{{ t('shell.signOut') }}</fluent-button>
       </div>
     </header>
 
     <nav class="shell-tabs" aria-label="Main sections">
-      <router-link v-for="tab in tabs" :key="tab.to" :to="tab.to">{{ tab.label }}</router-link>
+      <router-link v-for="tab in tabs" :key="tab.to" :to="tab.to">
+        {{ t(`shell.${tab.key}`) }}
+      </router-link>
     </nav>
 
     <main class="shell-main">
@@ -61,8 +75,8 @@ async function logout() {
       <span v-if="ver.info">
         {{ ver.info.version }} · {{ ver.info.commit }} · {{ ver.info.go_version }}
       </span>
-      <span v-else>Loading version…</span>
-      <span>WebSocket → TCP tunnel manager</span>
+      <span v-else>{{ t('shell.loadingVersion') }}</span>
+      <span>{{ t('shell.footerTagline') }}</span>
     </footer>
   </div>
 </template>

@@ -52,6 +52,8 @@ func Run(ctx context.Context, opts Options) error {
 	runtime := services.NewRuntime()
 	eventBus := events.NewBus()
 
+	supervisor := newServerSupervisor(opts, registry, runtime, eventBus)
+
 	var wg sync.WaitGroup
 	errs := make(chan error, 4)
 
@@ -59,21 +61,19 @@ func Run(ctx context.Context, opts Options) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := runAPI(ctx, opts, registry, runtime, eventBus); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			if err := runAPI(ctx, opts, registry, runtime, eventBus, supervisor); err != nil && !errors.Is(err, http.ErrServerClosed) {
 				errs <- fmt.Errorf("api: %w", err)
 			}
 		}()
 	}
 
-	if cfg.ServerConfigured() {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			if err := runServer(ctx, opts, registry, runtime, eventBus); err != nil && !errors.Is(err, http.ErrServerClosed) {
-				errs <- fmt.Errorf("server: %w", err)
-			}
-		}()
-	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := supervisor.Run(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errs <- fmt.Errorf("server: %w", err)
+		}
+	}()
 
 	if cfg.ClientConfigured() {
 		wg.Add(1)
@@ -97,15 +97,16 @@ func Run(ctx context.Context, opts Options) error {
 	return firstErr
 }
 
-func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
+func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus, supervisor *serverSupervisor) error {
 	auth := services.NewAuthService(reg.HTTPToken)
 	router := api.NewRouter(api.Options{
-		Registry:    reg,
-		Runtime:     rt,
-		Auth:        auth,
-		Events:      bus,
-		RequireAuth: opts.Config.App.HTTPAuth,
-		Logger:      opts.Logger.With("component", "api"),
+		Registry:      reg,
+		Runtime:       rt,
+		Auth:          auth,
+		Events:        bus,
+		RequireAuth:   opts.Config.App.HTTPAuth,
+		Logger:        opts.Logger.With("component", "api"),
+		ServerControl: supervisor,
 	})
 	web.Mount(router)
 
@@ -126,8 +127,84 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 	return srv.ListenAndServe()
 }
 
-func runServer(ctx context.Context, opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
-	cfg := opts.Config.Server
+// serverSupervisor runs the ws2tcp-server subsystem in a loop so that
+// transport-affecting config edits (listen / ws_path / aes_key / tls / ...)
+// can take effect without restarting the whole process. The management API
+// triggers a restart by calling Restart(), which cancels the current server
+// listener and lets the loop spin up a fresh one with the latest config.
+type serverSupervisor struct {
+	opts      Options
+	reg       *services.Registry
+	rt        *services.Runtime
+	bus       *events.Bus
+	restartCh chan struct{}
+}
+
+func newServerSupervisor(opts Options, reg *services.Registry, rt *services.Runtime, bus *events.Bus) *serverSupervisor {
+	return &serverSupervisor{opts: opts, reg: reg, rt: rt, bus: bus, restartCh: make(chan struct{}, 1)}
+}
+
+// Restart signals the supervisor to tear down the current server listener
+// (if any) and restart with the latest on-disk config. Non-blocking: if a
+// restart is already pending the call coalesces.
+func (s *serverSupervisor) Restart() {
+	select {
+	case s.restartCh <- struct{}{}:
+	default:
+	}
+}
+
+// Run blocks until ctx is cancelled, restarting the underlying server
+// each time Restart() fires.
+func (s *serverSupervisor) Run(ctx context.Context) error {
+	for {
+		cfg, err := config.Load(s.opts.Paths.Config())
+		if err != nil {
+			s.opts.Logger.Error("supervisor: load config", "err", err)
+			cfg = s.opts.Config
+		}
+		if !cfg.ServerConfigured() {
+			// nothing to run yet — wait for either a restart signal or shutdown.
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-s.restartCh:
+				continue
+			}
+		}
+
+		serverCtx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() {
+			done <- runServer(serverCtx, s.opts, cfg.Server, s.reg, s.rt, s.bus)
+		}()
+
+		select {
+		case <-ctx.Done():
+			cancel()
+			<-done
+			return nil
+		case <-s.restartCh:
+			s.opts.Logger.Info("server: restart requested, reloading")
+			cancel()
+			<-done
+			// loop back and reload from disk
+		case err := <-done:
+			cancel()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				return err
+			}
+			// server exited cleanly with no restart pending; wait for either.
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-s.restartCh:
+			}
+		}
+	}
+}
+
+func runServer(ctx context.Context, opts Options, cfg config.ServerConfig, reg *services.Registry, rt *services.Runtime, bus *events.Bus) error {
 	handler := server.NewHandler(cfg, reg, rt, bus, opts.Logger.With("component", "server"))
 	defer handler.Close()
 

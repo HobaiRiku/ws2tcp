@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { api } from '@/api/client'
 import type { ClientProfile, Endpoint, Tunnel } from '@/api/types'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import Modal from '@/components/Modal.vue'
+import IconBtn from '@/components/IconBtn.vue'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const runtime = useRuntimeStore()
 const toast = useToast()
 const confirm = useConfirm()
@@ -15,11 +18,8 @@ const profiles = ref<ClientProfile[]>([])
 const endpoints = ref<Endpoint[]>([])
 const hiddenInvalidProfiles = ref(0)
 const busy = ref(false)
-const selectedProfileName = ref('')
-
-const selectedProfile = computed(
-  () => profiles.value.find(p => p.name === selectedProfileName.value) ?? null
-)
+// 哪些 profile 行处于展开状态; 默认全收起.
+const expanded = reactive<Record<string, boolean>>({})
 
 type ProfileForm = { name: string; endpoint: string; client_id: string; client_secret: string }
 
@@ -55,12 +55,10 @@ async function load() {
   hiddenInvalidProfiles.value = (pData?.length ?? 0) - next.length
   profiles.value = next
   endpoints.value = (eData ?? []).filter(item => item.name?.trim())
+}
 
-  if (!selectedProfileName.value && next[0]) {
-    selectedProfileName.value = next[0].name
-  } else if (selectedProfileName.value && !next.some(p => p.name === selectedProfileName.value)) {
-    selectedProfileName.value = next[0]?.name ?? ''
-  }
+function toggleExpand(name: string) {
+  expanded[name] = !expanded[name]
 }
 
 function openCreateProfile() {
@@ -84,7 +82,7 @@ function openEditProfile(p: ClientProfile) {
       name: p.name,
       endpoint: p.endpoint,
       client_id: p.client_id,
-      client_secret: ''
+      client_secret: p.client_secret ?? ''
     }
   }
 }
@@ -95,22 +93,19 @@ async function saveProfile() {
   if (dlg.editing) {
     const payload: Record<string, unknown> = {
       endpoint: dlg.form.endpoint,
-      client_id: dlg.form.client_id
+      client_id: dlg.form.client_id,
+      client_secret: dlg.form.client_secret
     }
-    if (dlg.form.client_secret.trim()) payload.client_secret = dlg.form.client_secret.trim()
     const [err] = await api.patch(`/api/client/profiles/${encodeURIComponent(dlg.editing)}`, payload)
     busy.value = false
     if (err) return toast.error(err.message)
-    toast.success(`已更新 profile "${dlg.editing}"`)
+    toast.success(t('clients.profileSaved', { name: dlg.editing }))
   } else {
-    const [err] = await api.post('/api/client/profiles', {
-      ...dlg.form,
-      tunnels: []
-    })
+    const [err] = await api.post('/api/client/profiles', { ...dlg.form, tunnels: [] })
     busy.value = false
     if (err) return toast.error(err.message)
-    toast.success(`已创建 profile "${dlg.form.name}"`)
-    selectedProfileName.value = dlg.form.name
+    toast.success(t('clients.profileSaved', { name: dlg.form.name }))
+    expanded[dlg.form.name] = true
   }
   profileDialog.value.open = false
   await load()
@@ -118,15 +113,15 @@ async function saveProfile() {
 
 async function removeProfile(name: string) {
   const ok = await confirm.ask({
-    title: '删除 profile',
-    message: `确定删除 profile "${name}" 及其所有 tunnel 吗？`,
+    title: t('clients.deleteProfileTitle'),
+    message: t('clients.confirmDeleteProfile', { name }),
     danger: true,
-    confirmText: '删除'
+    confirmText: t('common.delete')
   })
   if (!ok) return
   const [err] = await api.delete(`/api/client/profiles/${encodeURIComponent(name)}`)
   if (err) return toast.error(err.message)
-  toast.success(`已删除 profile "${name}"`)
+  toast.success(t('clients.profileDeleted', { name }))
   await load()
 }
 
@@ -135,12 +130,7 @@ function openCreateTunnel(profile: string) {
 }
 
 function openEditTunnel(profile: string, tunnel: Tunnel) {
-  tunnelDialog.value = {
-    open: true,
-    profile,
-    editing: tunnel.name,
-    form: { ...tunnel }
-  }
+  tunnelDialog.value = { open: true, profile, editing: tunnel.name, form: { ...tunnel } }
 }
 
 async function saveTunnel() {
@@ -158,12 +148,12 @@ async function saveTunnel() {
     )
     busy.value = false
     if (err) return toast.error(err.message)
-    toast.success(`已更新 tunnel "${dlg.editing}"`)
+    toast.success(t('clients.tunnelSaved', { name: dlg.editing }))
   } else {
     const [err] = await api.post(`/api/client/${encodeURIComponent(dlg.profile)}/tunnels`, dlg.form)
     busy.value = false
     if (err) return toast.error(err.message)
-    toast.success(`已创建 tunnel "${dlg.form.name}"`)
+    toast.success(t('clients.tunnelSaved', { name: dlg.form.name }))
   }
   tunnelDialog.value.open = false
   await load()
@@ -171,17 +161,17 @@ async function saveTunnel() {
 
 async function removeTunnel(profile: string, tunnel: string) {
   const ok = await confirm.ask({
-    title: '删除 tunnel',
-    message: `确定从 "${profile}" 删除 tunnel "${tunnel}" 吗？`,
+    title: t('clients.deleteTunnelTitle'),
+    message: t('clients.confirmDeleteTunnel', { profile, name: tunnel }),
     danger: true,
-    confirmText: '删除'
+    confirmText: t('common.delete')
   })
   if (!ok) return
   const [err] = await api.delete(
     `/api/client/${encodeURIComponent(profile)}/tunnels/${encodeURIComponent(tunnel)}`
   )
   if (err) return toast.error(err.message)
-  toast.success(`已删除 tunnel "${tunnel}"`)
+  toast.success(t('clients.tunnelDeleted', { name: tunnel }))
   await load()
 }
 
@@ -202,109 +192,130 @@ onMounted(() => {
 <template>
   <section class="page">
     <div class="page-toolbar">
-      <h1 class="page-title">Clients</h1>
+      <h1 class="page-title">{{ t('clients.title') }}</h1>
       <div class="toolbar-actions">
-        <fluent-button appearance="stealth" @click="load">刷新</fluent-button>
-        <fluent-button appearance="accent" @click="openCreateProfile">新增 profile</fluent-button>
+        <IconBtn icon="refresh" :title="t('common.refresh')" @click="load" />
+        <IconBtn icon="add" variant="primary" :title="t('common.add')" @click="openCreateProfile" />
       </div>
     </div>
 
     <div v-if="hiddenInvalidProfiles" class="banner error">
-      已隐藏 {{ hiddenInvalidProfiles }} 条名称为空的无效 profile。
+      {{ t('clients.invalidHidden', { count: hiddenInvalidProfiles }) }}
     </div>
 
-    <table class="table">
+    <table class="table expandable">
       <thead>
         <tr>
-          <th>Profile</th>
-          <th>Endpoint</th>
-          <th>Client ID</th>
-          <th>Tunnels</th>
+          <th class="col-toggle"></th>
+          <th>{{ t('clients.columnProfile') }}</th>
+          <th>{{ t('clients.columnEndpoint') }}</th>
+          <th>{{ t('clients.columnClientId') }}</th>
+          <th>{{ t('clients.columnTunnels') }}</th>
           <th class="col-actions"></th>
         </tr>
       </thead>
       <tbody>
-        <tr
-          v-for="profile in profiles"
-          :key="profile.name"
-          :class="{ 'row-active': profile.name === selectedProfileName }"
-          @click="selectedProfileName = profile.name"
-        >
-          <td><strong>{{ profile.name }}</strong></td>
-          <td>{{ profile.endpoint }}</td>
-          <td>{{ profile.client_id }}</td>
-          <td>{{ profile.tunnels.length }}</td>
-          <td class="col-actions">
-            <div class="row-actions" @click.stop>
-              <fluent-button appearance="stealth" @click="openEditProfile(profile)">编辑</fluent-button>
-              <fluent-button appearance="stealth" class="danger" @click="removeProfile(profile.name)">删除</fluent-button>
-            </div>
-          </td>
-        </tr>
+        <template v-for="profile in profiles" :key="profile.name">
+          <tr class="row-clickable" @click="toggleExpand(profile.name)">
+            <td class="col-toggle">
+              <IconBtn
+                :icon="expanded[profile.name] ? 'collapse' : 'expand'"
+                size="sm"
+                :title="expanded[profile.name] ? t('common.collapse') : t('common.expand')"
+                @click.stop="toggleExpand(profile.name)"
+              />
+            </td>
+            <td><strong>{{ profile.name }}</strong></td>
+            <td>{{ profile.endpoint }}</td>
+            <td>{{ profile.client_id }}</td>
+            <td>{{ profile.tunnels.length }}</td>
+            <td class="col-actions">
+              <div class="row-actions" @click.stop>
+                <IconBtn icon="edit" :title="t('common.edit')" @click="openEditProfile(profile)" />
+                <IconBtn
+                  icon="delete"
+                  variant="danger"
+                  :title="t('common.delete')"
+                  @click="removeProfile(profile.name)"
+                />
+              </div>
+            </td>
+          </tr>
+          <tr v-if="expanded[profile.name]" class="row-detail">
+            <td colspan="6">
+              <div class="detail-toolbar">
+                <span class="detail-title">{{ t('clients.columnTunnels') }} · {{ profile.name }}</span>
+                <IconBtn
+                  icon="add"
+                  variant="primary"
+                  size="sm"
+                  :title="t('clients.addTunnel')"
+                  @click="openCreateTunnel(profile.name)"
+                />
+              </div>
+              <table class="table sub-table">
+                <thead>
+                  <tr>
+                    <th>{{ t('clients.columnTunnelName') }}</th>
+                    <th>{{ t('clients.columnTunnelListen') }}</th>
+                    <th>{{ t('clients.columnTunnelTarget') }}</th>
+                    <th>{{ t('clients.columnTunnelStatus') }}</th>
+                    <th>{{ t('clients.columnTunnelConnections') }}</th>
+                    <th class="col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="tunnel in profile.tunnels" :key="tunnel.name">
+                    <td><strong>{{ tunnel.name }}</strong></td>
+                    <td>{{ tunnel.listen }}</td>
+                    <td>{{ tunnel.target_host }}:{{ tunnel.target_port }}</td>
+                    <td>
+                      <span class="badge" :class="tunnelStateClass(profile.name, tunnel.name)">
+                        {{ runtime.tunnelStatus(profile.name, tunnel.name)?.state ?? t('common.unknown') }}
+                      </span>
+                      <div
+                        v-if="runtime.tunnelStatus(profile.name, tunnel.name)?.error"
+                        class="inline-error"
+                      >
+                        {{ runtime.tunnelStatus(profile.name, tunnel.name)?.error }}
+                      </div>
+                    </td>
+                    <td>{{ runtime.tunnelStatus(profile.name, tunnel.name)?.active_connections ?? 0 }}</td>
+                    <td class="col-actions">
+                      <div class="row-actions">
+                        <IconBtn icon="edit" :title="t('common.edit')" @click="openEditTunnel(profile.name, tunnel)" />
+                        <IconBtn
+                          icon="delete"
+                          variant="danger"
+                          :title="t('common.delete')"
+                          @click="removeTunnel(profile.name, tunnel.name)"
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-if="!profile.tunnels.length">
+                    <td colspan="6" class="empty-cell">{{ t('clients.emptyTunnels') }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </td>
+          </tr>
+        </template>
         <tr v-if="!profiles.length">
-          <td colspan="5" class="empty-cell">尚未配置 client profile。</td>
+          <td colspan="6" class="empty-cell">{{ t('clients.empty') }}</td>
         </tr>
       </tbody>
     </table>
 
-    <section v-if="selectedProfile" class="sub-section">
-      <div class="page-toolbar">
-        <h2 class="sub-title">
-          Tunnels · <span class="muted">{{ selectedProfile.name }}</span>
-        </h2>
-        <fluent-button appearance="accent" @click="openCreateTunnel(selectedProfile.name)">
-          新增 tunnel
-        </fluent-button>
-      </div>
-
-      <table class="table">
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>监听</th>
-            <th>目标</th>
-            <th>状态</th>
-            <th>连接数</th>
-            <th class="col-actions"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="tunnel in selectedProfile.tunnels" :key="tunnel.name">
-            <td><strong>{{ tunnel.name }}</strong></td>
-            <td>{{ tunnel.listen }}</td>
-            <td>{{ tunnel.target_host }}:{{ tunnel.target_port }}</td>
-            <td>
-              <span class="badge" :class="tunnelStateClass(selectedProfile.name, tunnel.name)">
-                {{ runtime.tunnelStatus(selectedProfile.name, tunnel.name)?.state ?? 'unknown' }}
-              </span>
-              <div v-if="runtime.tunnelStatus(selectedProfile.name, tunnel.name)?.error" class="inline-error">
-                {{ runtime.tunnelStatus(selectedProfile.name, tunnel.name)?.error }}
-              </div>
-            </td>
-            <td>{{ runtime.tunnelStatus(selectedProfile.name, tunnel.name)?.active_connections ?? 0 }}</td>
-            <td class="col-actions">
-              <div class="row-actions">
-                <fluent-button appearance="stealth" @click="openEditTunnel(selectedProfile.name, tunnel)">编辑</fluent-button>
-                <fluent-button appearance="stealth" class="danger" @click="removeTunnel(selectedProfile.name, tunnel.name)">删除</fluent-button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="!selectedProfile.tunnels.length">
-            <td colspan="6" class="empty-cell">该 profile 尚无 tunnel。</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
-
     <Modal
       :open="profileDialog.open"
-      :title="profileDialog.editing ? `编辑 profile：${profileDialog.editing}` : '新增 profile'"
+      :title="profileDialog.editing ? t('clients.editProfileTitle', { name: profileDialog.editing }) : t('clients.addProfileTitle')"
       width="600px"
       @close="profileDialog.open = false"
     >
       <div class="form-grid two-up">
         <label>
-          <span class="field-label">Profile 名称</span>
+          <span class="field-label">{{ t('clients.fieldProfileName') }}</span>
           <input
             v-model="profileDialog.form.name"
             class="text-input"
@@ -312,45 +323,42 @@ onMounted(() => {
           />
         </label>
         <label>
-          <span class="field-label">Endpoint</span>
+          <span class="field-label">{{ t('clients.fieldEndpoint') }}</span>
           <select v-model="profileDialog.form.endpoint" class="select-input">
-            <option disabled value="">选择 endpoint</option>
+            <option disabled value="">{{ t('clients.selectEndpoint') }}</option>
             <option v-for="endpoint in endpoints" :key="endpoint.name" :value="endpoint.name">
               {{ endpoint.name }}
             </option>
           </select>
         </label>
         <label>
-          <span class="field-label">Client ID</span>
+          <span class="field-label">{{ t('clients.fieldClientId') }}</span>
           <input v-model="profileDialog.form.client_id" class="text-input" />
         </label>
         <label>
-          <span class="field-label">{{ profileDialog.editing ? '轮换 secret' : 'Client secret' }}</span>
-          <input
-            v-model="profileDialog.form.client_secret"
-            class="text-input"
-            type="password"
-            :placeholder="profileDialog.editing ? '留空则保留当前 secret' : ''"
-          />
+          <span class="field-label">{{ t('clients.fieldClientSecret') }}</span>
+          <input v-model="profileDialog.form.client_secret" class="text-input" type="text" />
         </label>
       </div>
       <template #footer>
-        <fluent-button appearance="stealth" @click="profileDialog.open = false">取消</fluent-button>
+        <fluent-button appearance="stealth" @click="profileDialog.open = false">{{ t('common.cancel') }}</fluent-button>
         <fluent-button appearance="accent" :disabled="busy" @click="saveProfile">
-          {{ busy ? '保存中…' : '保存' }}
+          {{ busy ? t('common.saving') : t('common.save') }}
         </fluent-button>
       </template>
     </Modal>
 
     <Modal
       :open="tunnelDialog.open"
-      :title="tunnelDialog.editing ? `编辑 tunnel：${tunnelDialog.editing}` : `新增 tunnel · ${tunnelDialog.profile}`"
+      :title="tunnelDialog.editing
+        ? t('clients.editTunnelTitle', { name: tunnelDialog.editing })
+        : t('clients.addTunnelTitle', { profile: tunnelDialog.profile })"
       width="600px"
       @close="tunnelDialog.open = false"
     >
       <div class="form-grid two-up">
         <label>
-          <span class="field-label">名称</span>
+          <span class="field-label">{{ t('clients.fieldTunnelName') }}</span>
           <input
             v-model="tunnelDialog.form.name"
             class="text-input"
@@ -358,22 +366,22 @@ onMounted(() => {
           />
         </label>
         <label>
-          <span class="field-label">监听</span>
+          <span class="field-label">{{ t('clients.fieldListen') }}</span>
           <input v-model="tunnelDialog.form.listen" class="text-input" />
         </label>
         <label>
-          <span class="field-label">目标 host</span>
+          <span class="field-label">{{ t('clients.fieldTargetHost') }}</span>
           <input v-model="tunnelDialog.form.target_host" class="text-input" />
         </label>
         <label>
-          <span class="field-label">目标端口</span>
+          <span class="field-label">{{ t('clients.fieldTargetPort') }}</span>
           <input v-model.number="tunnelDialog.form.target_port" class="text-input" type="number" />
         </label>
       </div>
       <template #footer>
-        <fluent-button appearance="stealth" @click="tunnelDialog.open = false">取消</fluent-button>
+        <fluent-button appearance="stealth" @click="tunnelDialog.open = false">{{ t('common.cancel') }}</fluent-button>
         <fluent-button appearance="accent" :disabled="busy" @click="saveTunnel">
-          {{ busy ? '保存中…' : '保存' }}
+          {{ busy ? t('common.saving') : t('common.save') }}
         </fluent-button>
       </template>
     </Modal>

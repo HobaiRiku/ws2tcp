@@ -20,7 +20,7 @@ export type ACLRule = {
 export type ServerClient = {
   id: string
   acl: ACLRule[]
-  secret?: string
+  secret: string
 }
 
 export type ServerStats = {
@@ -35,8 +35,11 @@ export type ServerSettings = {
   ws_path: string
   ws_host: string
   trust_proxy: boolean
+  aes_key: string
   use_encryption: boolean
   tls_enabled: boolean
+  tls_cert: string
+  tls_key: string
 }
 
 export type Endpoint = {
@@ -61,7 +64,7 @@ export type ClientProfile = {
   name: string
   client_id: string
   endpoint: string
-  client_secret?: string
+  client_secret: string
   tunnels: Tunnel[]
 }
 

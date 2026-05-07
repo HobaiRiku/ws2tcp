@@ -2,8 +2,11 @@
 import { computed, onMounted } from 'vue'
 import { useRuntimeStore } from '@/stores/runtime'
 import { formatBytes, formatDuration, formatTimeAgo } from '@/utils/format'
+import { useI18n } from 'vue-i18n'
+import IconBtn from '@/components/IconBtn.vue'
 
 const runtime = useRuntimeStore()
+const { t } = useI18n()
 
 onMounted(() => {
   runtime.refresh()
@@ -23,50 +26,45 @@ function statusClass(state: string) {
 }
 
 function describeEvent(topic: string) {
-  if (topic === 'tunnel.state') return 'Tunnel state changed'
-  if (topic === 'server.conn.opened') return 'Server connection opened'
-  if (topic === 'server.conn.closed') return 'Server connection closed'
+  if (topic === 'tunnel.state') return t('dashboard.eventTunnelState')
+  if (topic === 'server.conn.opened') return t('dashboard.eventConnOpened')
+  if (topic === 'server.conn.closed') return t('dashboard.eventConnClosed')
   return topic
 }
 </script>
 
 <template>
   <section class="page">
-    <div class="page-header">
-      <div>
-        <div class="page-kicker">Overview</div>
-        <h1>Live tunnel health and activity</h1>
-        <p class="page-copy">
-          Watch the current runtime, recent tunnel state changes, and which server identities are
-          actively carrying connections.
-        </p>
+    <div class="page-toolbar">
+      <h1 class="page-title">{{ t('dashboard.title') }}</h1>
+      <div class="toolbar-actions">
+        <IconBtn icon="refresh" :title="t('common.refresh')" @click="runtime.refresh()" />
       </div>
-      <fluent-button appearance="stealth" @click="runtime.refresh()">Refresh</fluent-button>
     </div>
 
     <div class="stat-grid">
       <article class="stat-card">
-        <span class="stat-label">Uptime</span>
+        <span class="stat-label">{{ t('dashboard.uptime') }}</span>
         <strong>{{ formatDuration(runtime.serverStats?.uptime_seconds ?? 0) }}</strong>
       </article>
       <article class="stat-card">
-        <span class="stat-label">Transferred in</span>
+        <span class="stat-label">{{ t('dashboard.bytesIn') }}</span>
         <strong>{{ formatBytes(runtime.serverStats?.bytes_in ?? 0) }}</strong>
       </article>
       <article class="stat-card">
-        <span class="stat-label">Transferred out</span>
+        <span class="stat-label">{{ t('dashboard.bytesOut') }}</span>
         <strong>{{ formatBytes(runtime.serverStats?.bytes_out ?? 0) }}</strong>
       </article>
       <article class="stat-card">
-        <span class="stat-label">Server live connections</span>
+        <span class="stat-label">{{ t('dashboard.activeConnections') }}</span>
         <strong>{{ runtime.activeServerConnections }}</strong>
       </article>
       <article class="stat-card">
-        <span class="stat-label">Listening tunnels</span>
+        <span class="stat-label">{{ t('dashboard.listeningTunnels') }}</span>
         <strong>{{ tunnelCounts.listening }}</strong>
       </article>
       <article class="stat-card">
-        <span class="stat-label">Tunnel errors</span>
+        <span class="stat-label">{{ t('dashboard.errorTunnels') }}</span>
         <strong>{{ tunnelCounts.error }}</strong>
       </article>
     </div>
@@ -75,20 +73,20 @@ function describeEvent(topic: string) {
       <section class="section-card">
         <div class="section-head">
           <div>
-            <h2>Client tunnels</h2>
-            <p>Runtime status for each configured client tunnel.</p>
+            <h2>{{ t('dashboard.clientTunnels') }}</h2>
+            <p>{{ t('dashboard.clientTunnelsDesc') }}</p>
           </div>
         </div>
 
         <table class="table">
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Tunnel</th>
-              <th>Status</th>
-              <th>Connections</th>
-              <th>Endpoint</th>
-              <th>Updated</th>
+              <th>{{ t('dashboard.columnClient') }}</th>
+              <th>{{ t('dashboard.columnTunnel') }}</th>
+              <th>{{ t('dashboard.columnStatus') }}</th>
+              <th>{{ t('dashboard.columnConnections') }}</th>
+              <th>{{ t('dashboard.columnEndpoint') }}</th>
+              <th>{{ t('dashboard.columnUpdated') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -104,7 +102,7 @@ function describeEvent(topic: string) {
               <td>{{ formatTimeAgo(item.updated_at) }}</td>
             </tr>
             <tr v-if="!runtime.tunnels.length">
-              <td colspan="6" class="empty-cell">No client tunnels are reporting runtime state yet.</td>
+              <td colspan="6" class="empty-cell">{{ t('dashboard.emptyTunnels') }}</td>
             </tr>
           </tbody>
         </table>
@@ -113,13 +111,17 @@ function describeEvent(topic: string) {
       <section class="section-card">
         <div class="section-head">
           <div>
-            <h2>Recent events</h2>
-            <p>Live updates streamed from the management event bus.</p>
+            <h2>{{ t('dashboard.recentEvents') }}</h2>
+            <p>{{ t('dashboard.recentEventsDesc') }}</p>
           </div>
         </div>
 
         <div class="event-list">
-          <article v-for="event in runtime.recentEvents" :key="`${event.topic}-${event.time}`" class="event-row">
+          <article
+            v-for="event in runtime.recentEvents"
+            :key="`${event.topic}-${event.time}`"
+            class="event-row"
+          >
             <div>
               <strong>{{ describeEvent(event.topic) }}</strong>
               <div class="muted">{{ event.topic }}</div>
@@ -129,7 +131,7 @@ function describeEvent(topic: string) {
             </div>
           </article>
           <div v-if="!runtime.recentEvents.length" class="empty-state">
-            Waiting for new tunnel and server connection events.
+            {{ t('dashboard.emptyEvents') }}
           </div>
         </div>
       </section>
