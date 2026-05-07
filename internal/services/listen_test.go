@@ -27,6 +27,7 @@ func TestValidateListenFormat(t *testing.T) {
 		{"127.0.0.1:abc", false}, // non-numeric port
 		{"127.0.0.1:99999", false},
 		{"127.0.0.1:-1", false},
+		{"127.0.0.1:0", false}, // OS 任选, 对长期 tunnel 没意义, 拒绝
 		{"-bad-:80", false},
 	}
 	for _, c := range cases {

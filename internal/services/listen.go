@@ -32,8 +32,10 @@ func validateListenFormat(addr string) error {
 	if err != nil {
 		return fmt.Errorf("invalid listen %q: port not numeric", addr)
 	}
-	if port < 0 || port > 65535 {
-		return fmt.Errorf("invalid listen %q: port out of range (0-65535)", addr)
+	// port 0 在 net.Listen 语义里是 "OS 任选一个临时端口", 对一个长期运行的
+	// tunnel 没有意义 — 用户填 0 八成是手滑或没填. 直接拒绝.
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("invalid listen %q: port must be 1-65535", addr)
 	}
 	host = strings.Trim(host, "[]")
 	switch host {

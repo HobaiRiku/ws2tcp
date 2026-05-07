@@ -39,7 +39,7 @@ const tunnelDialog = ref<{ open: boolean; profile: string; editing: string; form
 })
 
 function emptyTunnel(): Tunnel {
-  return { name: '', listen: '127.0.0.1:0', target_host: '', target_port: 22 }
+  return { name: '', listen: '127.0.0.1:', target_host: '', target_port: 22 }
 }
 
 const logViewer = ref<{ title: string; filters: Record<string, string> } | null>(null)
