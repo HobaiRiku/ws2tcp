@@ -193,9 +193,20 @@ make ui-lint         # 前端 lint
 发布构建：
 
 ```bash
-make all             # 等价 make ui-build && make build
+make all             # 等价 make ui-build && make build (本机平台)
 # 产物: build/bin/ws2tcp (内嵌 SPA)
 ```
+
+跨平台批量构建：
+
+```bash
+make dist                                     # 全矩阵 (darwin/linux/windows × amd64/arm64/arm)
+make dist DIST_TARGETS="linux/amd64 linux/arm64"   # 只构建子集
+make dist-list                                # 看当前矩阵
+make dist-clean                               # 清空 build/dist/
+```
+
+产物落在 `build/dist/`，命名形如 `ws2tcp_<version>_<os>_<arch>[.exe]`，并附一份 `SHA256SUMS` 供发布页校验。全部 `CGO_ENABLED=0 + -trimpath`，输出静态二进制，不依赖 host 的 libc 版本。
 
 ---
 
@@ -219,7 +230,7 @@ make all             # 等价 make ui-build && make build
 
 ## 协议许可
 
-[MIT License](LICENSE) © 2026 LuBaobei
+[MIT License](LICENSE) © 2026 HobaiRiku
 
 如果你要把它用到生产环境，请先：
 1. 用 `make build` 自构一份；2. 确认 `app.http_token` 是真随机；3. 用 nginx + Let's Encrypt 包一层 wss；4. ACL 收紧到最小授权范围。
