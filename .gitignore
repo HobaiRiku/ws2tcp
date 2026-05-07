@@ -12,10 +12,10 @@ node_modules
 /ui/dist/
 /ui/node_modules/
 
-# UI build artifacts embedded by Go (`go:embed`).
-# 保留 .gitkeep 让 `//go:embed all:static` 能编译; 真正产物由 `make ui-build` 生成.
-/internal/web/static/*
-!/internal/web/static/.gitkeep
+# UI build artifacts embedded by Go (`go:embed`) when -tags embedui is set.
+# 默认构建不依赖这些产物, 所以整个目录都可以忽略 — `make ui-build` 会按需生成,
+# 没有它的时候也不影响编译/单测 (embed_ui.go 走 build tag, 默认走占位 handler).
+/internal/web/static/
 
 # Local env
 .env

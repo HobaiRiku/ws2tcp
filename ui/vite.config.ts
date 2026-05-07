@@ -2,12 +2,12 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
-// Vite 把产物直接落到 internal/web/static/, 让 Go 的 //go:embed all:static 自动
-// 拾取. dev 时通过 proxy 把 /api 转发到本地后端.
+// Vite 把产物直接落到 internal/web/static/, 由带 -tags embedui 的发布构建
+// 通过 internal/web/embed_ui.go 内嵌. 默认构建 (make dev / go run .) 不引用
+// 这个目录, 所以仓库里也不再保留 .gitkeep.
 //
-// 注意: emptyOutDir 设为 false, 因为 outDir 里有一个 git 跟踪的 .gitkeep 占位文件,
-// 用来保证 //go:embed 在前端没构建时也能编译通过. Makefile 的 ui-build 会在调用
-// vite 之前手动清理 assets/ 与 index.html.
+// dev 工作流: 一边 `make run` 起后端, 一边 `make ui-dev` 起 vite, 浏览器访问
+// vite 端口即可, /api 由下方 proxy 转给后端.
 //
 // 默认 dev port = 5266, 走 .env / .env.local 用 VITE_DEV_PORT 覆盖.
 // dev 阶段 /api proxy 目标用 VITE_API_PROXY_TARGET 覆盖, 默认 http://127.0.0.1:7321.
