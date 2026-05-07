@@ -159,7 +159,10 @@ func (t *Tunnel) handleConn(ctx context.Context, tcp net.Conn) {
 
 	netConn := websocket.NetConn(ctx, wsConn, websocket.MessageBinary)
 	if err := wsproxy.Bridge(ctx, netConn, tcp, useEnc, e2eKey); err != nil {
-		t.log.Warn("bridge ended", "err", err)
+		// Bridge already filters expected-close errors; what's left is rare
+		// enough to log at Info — operator visibility without crying wolf
+		// every time a user kills their SSH client.
+		t.log.Info("bridge ended", "err", err.Error())
 	}
 }
 

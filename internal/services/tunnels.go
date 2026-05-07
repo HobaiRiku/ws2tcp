@@ -204,6 +204,9 @@ func (r *Registry) CreateTunnel(clientName string, t config.Tunnel) error {
 	if _, err := r.FindTunnel(clientName, t.Name); err == nil {
 		return fmt.Errorf("tunnel %q already exists for client %q", t.Name, clientName)
 	}
+	if err := r.validateTunnelListen(clientName, t.Name, t.Listen, ""); err != nil {
+		return err
+	}
 	item, err := yamlNodeForValue(t)
 	if err != nil {
 		return err
@@ -230,6 +233,15 @@ func (r *Registry) CreateTunnel(clientName string, t config.Tunnel) error {
 
 // UpdateTunnel updates mutable fields of an existing tunnel.
 func (r *Registry) UpdateTunnel(clientName, name string, patch TunnelPatch) error {
+	if patch.Listen != nil {
+		current, err := r.FindTunnel(clientName, name)
+		if err != nil {
+			return err
+		}
+		if err := r.validateTunnelListen(clientName, name, *patch.Listen, current.Listen); err != nil {
+			return err
+		}
+	}
 	return r.mutateConfig(func(doc *yaml.Node) error {
 		profile, err := findConfiguredClientNode(doc, clientName)
 		if err != nil {

@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -144,5 +145,47 @@ func flattenAttr(prefix string, a slog.Attr, dst map[string]any) {
 		}
 		return
 	}
-	dst[key] = v.Any()
+	dst[key] = jsonSafeValue(v)
+}
+
+// jsonSafeValue normalises an slog.Value into something the JSON event
+// stream and the browser can render directly. Without this, error / struct
+// values leak through as Go objects and end up as "[object Object]" in the
+// UI (errors don't have a JSON marshaler, so encoding/json renders them
+// as "{}").
+func jsonSafeValue(v slog.Value) any {
+	switch v.Kind() {
+	case slog.KindString:
+		return v.String()
+	case slog.KindBool:
+		return v.Bool()
+	case slog.KindInt64:
+		return v.Int64()
+	case slog.KindUint64:
+		return v.Uint64()
+	case slog.KindFloat64:
+		return v.Float64()
+	case slog.KindDuration:
+		return v.Duration().String()
+	case slog.KindTime:
+		return v.Time().Format(time.RFC3339Nano)
+	}
+	raw := v.Any()
+	if raw == nil {
+		return nil
+	}
+	if err, ok := raw.(error); ok {
+		return err.Error()
+	}
+	if s, ok := raw.(fmt.Stringer); ok {
+		return s.String()
+	}
+	switch raw.(type) {
+	case string, bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64,
+		float32, float64:
+		return raw
+	}
+	return fmt.Sprintf("%+v", raw)
 }

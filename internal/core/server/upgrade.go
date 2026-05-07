@@ -131,8 +131,11 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Once we've upgraded, ResponseWriter is hijacked. Past this point
 	// we mustn't write to w — only the ws conn or tcp conn.
 	if err := h.run(r.Context(), wsConn, tcp, cmd, identity, ClientIP(r, h.cfg.TrustProxy)); err != nil {
-		h.log.Warn("bridge ended with error",
-			"err", err,
+		// Same rationale as the client side — wsproxy.Bridge has already
+		// filtered out expected-close errors, so anything remaining is rare
+		// but not necessarily operator-actionable.
+		h.log.Info("bridge ended with error",
+			"err", err.Error(),
 			"client_id", cmd.ClientID,
 			"target", target,
 			"client_ip", ClientIP(r, h.cfg.TrustProxy),

@@ -54,6 +54,12 @@ func sampleConfig() *config.Config {
 func newStoredRegistry(t *testing.T) (*Registry, paths.Paths) {
 	t.Helper()
 
+	// Stub the listen probe so the existing fixed-port tests (3306, 2222,
+	// ...) don't depend on the host having those ports free.
+	previous := listenProbe
+	listenProbe = func(string) error { return nil }
+	t.Cleanup(func() { listenProbe = previous })
+
 	p, err := paths.Resolve(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

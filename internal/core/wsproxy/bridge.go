@@ -11,6 +11,8 @@ import (
 	"errors"
 	"io"
 	"net"
+	"strings"
+	"syscall"
 
 	"websocket2Tcp/internal/core/crypto"
 )
@@ -77,12 +79,31 @@ func Bridge(ctx context.Context, ws, tcp net.Conn, useEncryption bool, key []byt
 
 // isExpectedClose suppresses the family of post-Close errors we get from
 // net.Conn / coder/websocket.NetConn when the peer (or our cancel goroutine)
-// shuts the conn down mid-copy. EOF and io.ErrClosedPipe are expected too.
+// shuts the conn down mid-copy. EOF / ErrClosedPipe / ErrClosed are the
+// usual local-side flavours; ECONNRESET / EPIPE / "broken pipe" are what
+// surface when the peer drops first. (*net.TCPConn).ReadFrom uses sendfile
+// on linux, so the underlying syscall errno is reachable through errors.Is.
 func isExpectedClose(err error) bool {
 	if err == nil {
 		return true
 	}
-	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, net.ErrClosed) {
+	if errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrClosedPipe) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, context.Canceled) ||
+		errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// Fallback string match for wrappers that don't carry the underlying
+	// syscall errno (e.g. some coder/websocket close frames).
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "use of closed network connection"),
+		strings.Contains(msg, "connection reset by peer"),
+		strings.Contains(msg, "broken pipe"),
+		strings.Contains(msg, "websocket: close"):
 		return true
 	}
 	return false
