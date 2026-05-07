@@ -51,8 +51,9 @@ server:
 	if !cfg.App.HTTPAuth {
 		t.Error("http_auth should default true")
 	}
-	if cfg.App.HTTPToken != "change-me-management-token" {
-		t.Errorf("http_token default missing: %q", cfg.App.HTTPToken)
+	// http_token 没有兜底默认; 缺字段就保持空, AuthService 拒绝所有访问.
+	if cfg.App.HTTPToken != "" {
+		t.Errorf("http_token should default to empty, got %q", cfg.App.HTTPToken)
 	}
 }
 

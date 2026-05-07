@@ -30,9 +30,10 @@ func (c *Config) validateApp() []string {
 			"app.http_auth=false is only allowed when app.http_listen is loopback (got %q)",
 			c.App.HTTPListen))
 	}
-	if c.App.HTTPAuth && strings.TrimSpace(c.App.HTTPToken) == "" {
-		errs = append(errs, "app.http_token required when app.http_auth=true")
-	}
+	// 故意不在这里强制 http_auth=true 时 token 必填: 进程仍然会启动并把
+	// 管理 API 全部 401, 让 operator 改 config 即可恢复, 而不是因为缺一
+	// 个字段就让 daemon 一直起不来 (尤其当通过服务管理器自启时, 启动失败
+	// 反而比"API 暂不可用"更难排查).
 	switch strings.ToLower(c.App.LogLevel) {
 	case "debug", "info", "warn", "warning", "error":
 	default:

@@ -46,10 +46,13 @@ func Load(path string) (*Config, error) {
 // before YAML decode so an absent key keeps the default, while an explicit
 // `false` in YAML overrides. (Go's zero value for bool is false, which is
 // indistinguishable from "absent" after unmarshal.)
+//
+// 注意: 这里**不**给 http_token 设兜底默认 — 缺失就保持空字符串, 由
+// services.AuthService 在校验时直接 401 (空 expected token 永不通过).
+// 写一个固定占位字符串等于把所有未配置的实例都暴露给同一把"密钥".
 func (c *Config) applyTrueDefaults() {
 	c.App.HTTPListen = "127.0.0.1:7321"
 	c.App.HTTPAuth = true
-	c.App.HTTPToken = "change-me-management-token"
 	c.App.LogLevel = "info"
 	c.Server.UseEncryption = true
 }
@@ -65,9 +68,6 @@ func (c *Config) applyZeroDefaults() {
 	}
 	if c.App.HTTPListen == "" {
 		c.App.HTTPListen = "127.0.0.1:7321"
-	}
-	if c.App.HTTPToken == "" && c.App.HTTPAuth {
-		c.App.HTTPToken = "change-me-management-token"
 	}
 }
 
