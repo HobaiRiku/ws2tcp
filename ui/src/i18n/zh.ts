@@ -57,6 +57,10 @@ export default {
     uptime: '运行时长',
     bytesIn: '入站流量',
     bytesOut: '出站流量',
+    serverBytesIn: '服务端入站',
+    serverBytesOut: '服务端出站',
+    clientBytesIn: '客户端入站',
+    clientBytesOut: '客户端出站',
     activeConnections: '活跃连接',
     listeningTunnels: '监听中 tunnel',
     errorTunnels: '错误 tunnel',
@@ -73,8 +77,13 @@ export default {
     emptyTunnels: '尚未上报 tunnel 状态',
     emptyEvents: '等待新的事件…',
     eventTunnelState: 'tunnel 状态变化',
+    eventTunnelRemoved: 'tunnel 已移除',
     eventConnOpened: '服务端连接打开',
-    eventConnClosed: '服务端连接关闭'
+    eventConnClosed: '服务端连接关闭',
+    eventAppStarted: '软件启动',
+    eventServerListening: '服务端开始监听',
+    eventApiListening: '管理 API 开始监听',
+    eventClientManagerStarted: '客户端管理器启动'
   },
   endpoints: {
     title: 'Endpoints',

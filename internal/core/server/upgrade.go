@@ -200,7 +200,10 @@ func (h *Handler) run(ctx context.Context, ws *websocket.Conn, tcp net.Conn, cmd
 	netConn := websocket.NetConn(ctx, ws, websocket.MessageBinary)
 	defer ws.Close(websocket.StatusNormalClosure, "")
 
-	return wsproxy.Bridge(ctx, netConn, tcp, useEncryption, endToEndKey)
+	return wsproxy.Bridge(ctx, netConn, tcp, useEncryption, endToEndKey, wsproxy.Counters{
+		In:  h.runtime.AddServerBytesIn,
+		Out: h.runtime.AddServerBytesOut,
+	})
 }
 
 func (h *Handler) gatePathAndHost(w http.ResponseWriter, r *http.Request) bool {

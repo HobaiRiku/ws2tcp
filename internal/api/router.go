@@ -72,8 +72,15 @@ type clientProfilePatchRequest struct {
 }
 
 type serverStatsResponse struct {
+	// bytes_in / bytes_out 保留为 server 视角的别名 (兼容老前端);
+	// server_bytes_* / client_bytes_* 是新拆分的两套独立计数器, 避免
+	// 单进程同时跑 server+client 时同一个字节被计两遍.
 	BytesIn           uint64           `json:"bytes_in"`
 	BytesOut          uint64           `json:"bytes_out"`
+	ServerBytesIn     uint64           `json:"server_bytes_in"`
+	ServerBytesOut    uint64           `json:"server_bytes_out"`
+	ClientBytesIn     uint64           `json:"client_bytes_in"`
+	ClientBytesOut    uint64           `json:"client_bytes_out"`
 	UptimeSeconds     int64            `json:"uptime_seconds"`
 	ClientConnections map[string]int32 `json:"client_connections"`
 }
@@ -522,10 +529,14 @@ func NewRouter(opts Options) *gin.Engine {
 	})
 
 	api.GET("/server/stats", readOnly, func(c *gin.Context) {
-		bytesIn, bytesOut := opts.Runtime.Totals()
+		serverIn, serverOut, clientIn, clientOut := opts.Runtime.Totals()
 		c.JSON(http.StatusOK, serverStatsResponse{
-			BytesIn:           bytesIn,
-			BytesOut:          bytesOut,
+			BytesIn:           serverIn,
+			BytesOut:          serverOut,
+			ServerBytesIn:     serverIn,
+			ServerBytesOut:    serverOut,
+			ClientBytesIn:     clientIn,
+			ClientBytesOut:    clientOut,
 			UptimeSeconds:     int64(services.Uptime() / time.Second),
 			ClientConnections: opts.Runtime.ClientConnections(),
 		})
@@ -533,6 +544,13 @@ func NewRouter(opts Options) *gin.Engine {
 
 	api.GET("/events/stream", readOnly, eventws.StreamHandler(opts.Events))
 	api.GET("/events/ws", readOnly, eventws.WebSocketHandler(opts.Events))
+	api.GET("/events/recent", readOnly, func(c *gin.Context) {
+		if opts.Events == nil {
+			c.JSON(http.StatusOK, []events.Message{})
+			return
+		}
+		c.JSON(http.StatusOK, opts.Events.Recent())
+	})
 
 	api.GET("/logs/recent", readOnly, func(c *gin.Context) {
 		if opts.LogTap == nil {

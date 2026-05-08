@@ -158,7 +158,10 @@ func (t *Tunnel) handleConn(ctx context.Context, tcp net.Conn) {
 	defer t.runtime.DecTunnelConnections(t.clientName, t.cfg.Name)
 
 	netConn := websocket.NetConn(ctx, wsConn, websocket.MessageBinary)
-	if err := wsproxy.Bridge(ctx, netConn, tcp, useEnc, e2eKey); err != nil {
+	if err := wsproxy.Bridge(ctx, netConn, tcp, useEnc, e2eKey, wsproxy.Counters{
+		In:  t.runtime.AddClientBytesIn,
+		Out: t.runtime.AddClientBytesOut,
+	}); err != nil {
 		// Bridge already filters expected-close errors; what's left is rare
 		// enough to log at Info — operator visibility without crying wolf
 		// every time a user kills their SSH client.

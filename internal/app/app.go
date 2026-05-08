@@ -22,6 +22,7 @@ import (
 	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/services"
 	"websocket2Tcp/internal/services/events"
+	"websocket2Tcp/internal/version"
 	"websocket2Tcp/internal/web"
 )
 
@@ -68,6 +69,14 @@ func Run(ctx context.Context, opts Options) error {
 		})
 	}
 
+	info := version.Current()
+	eventBus.Emit("app.started", map[string]any{
+		"version":    info.Version,
+		"commit":     info.Commit,
+		"build_date": info.BuildDate,
+	})
+	opts.Logger.Info("app started", "version", info.Version, "commit", info.Commit)
+
 	supervisor := newServerSupervisor(opts, registry, runtime, eventBus)
 
 	var wg sync.WaitGroup
@@ -96,6 +105,9 @@ func Run(ctx context.Context, opts Options) error {
 		go func() {
 			defer wg.Done()
 			mgr := client.NewManager(registry, runtime, eventBus, opts.Logger)
+			eventBus.Emit("client.manager.started", map[string]any{
+				"profiles": len(cfg.Client.Clients),
+			})
 			mgr.Run(ctx)
 		}()
 	}
@@ -141,6 +153,9 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 	}()
 
 	opts.Logger.Info("management api listening", "addr", opts.Config.App.HTTPListen)
+	bus.Emit("api.listening", map[string]any{
+		"addr": opts.Config.App.HTTPListen,
+	})
 	return srv.ListenAndServe()
 }
 
@@ -245,11 +260,21 @@ func runServer(ctx context.Context, opts Options, cfg config.ServerConfig, reg *
 		certPath := opts.Paths.ResolveRelative(cfg.TLS.Cert)
 		keyPath := opts.Paths.ResolveRelative(cfg.TLS.Key)
 		opts.Logger.Info("server listening (tls)", "addr", cfg.Listen, "ws_path", cfg.WSPath)
+		bus.Emit("server.listening", map[string]any{
+			"addr":    cfg.Listen,
+			"ws_path": cfg.WSPath,
+			"tls":     true,
+		})
 		// Force a sane TLS config: disable old protocols, leave cert hot-load
 		// to a future feature (operators can SIGHUP on cert rotation later).
 		srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 		return srv.ListenAndServeTLS(certPath, keyPath)
 	}
 	opts.Logger.Info("server listening", "addr", cfg.Listen, "ws_path", cfg.WSPath)
+	bus.Emit("server.listening", map[string]any{
+		"addr":    cfg.Listen,
+		"ws_path": cfg.WSPath,
+		"tls":     false,
+	})
 	return srv.ListenAndServe()
 }

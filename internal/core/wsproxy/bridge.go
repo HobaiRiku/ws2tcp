@@ -17,6 +17,18 @@ import (
 	"websocket2Tcp/internal/core/crypto"
 )
 
+// Counters lets Bridge emit per-direction byte totals as the copy proceeds.
+// Both fields are optional; nil callbacks are no-ops. Counters are called
+// from the copy goroutines, so implementations must be safe to invoke
+// concurrently (atomic counters in services.Runtime are fine).
+//
+// In: bytes the process *received* (ws -> tcp leg)
+// Out: bytes the process *sent*    (tcp -> ws leg)
+type Counters struct {
+	In  func(uint64)
+	Out func(uint64)
+}
+
 // Bridge runs bidirectional io.Copy between ws and tcp until either side
 // closes, then closes both. When useEncryption is true, the WS leg is
 // wrapped in EncryptWriter / DecryptReader keyed by key (32 bytes).
@@ -27,7 +39,7 @@ import (
 // Cancelling ctx forces an early teardown by closing both conns; the
 // goroutines will exit with use-of-closed-connection errors which are
 // classified as "expected close" and suppressed.
-func Bridge(ctx context.Context, ws, tcp net.Conn, useEncryption bool, key []byte) error {
+func Bridge(ctx context.Context, ws, tcp net.Conn, useEncryption bool, key []byte, counters Counters) error {
 	var (
 		wsReader io.Reader = ws
 		wsWriter io.Writer = ws
@@ -56,13 +68,24 @@ func Bridge(ctx context.Context, ws, tcp net.Conn, useEncryption bool, key []byt
 	type result struct{ err error }
 	done := make(chan result, 2)
 
+	// Wrap the destination Writer when a counter is set so we count bytes
+	// that actually made it through the pipe (matches what the peer saw),
+	// not bytes that decryption produced but io.Copy might fail to flush.
 	go func() {
-		_, err := io.Copy(tcp, wsReader) // ws -> tcp
+		var dst io.Writer = tcp
+		if counters.In != nil {
+			dst = &countingWriter{w: tcp, add: counters.In}
+		}
+		_, err := io.Copy(dst, wsReader) // ws -> tcp
 		_ = tcp.Close()
 		done <- result{err}
 	}()
 	go func() {
-		_, err := io.Copy(wsWriter, tcp) // tcp -> ws
+		var dst io.Writer = wsWriter
+		if counters.Out != nil {
+			dst = &countingWriter{w: wsWriter, add: counters.Out}
+		}
+		_, err := io.Copy(dst, tcp) // tcp -> ws
 		_ = ws.Close()
 		done <- result{err}
 	}()
@@ -75,6 +98,22 @@ func Bridge(ctx context.Context, ws, tcp net.Conn, useEncryption bool, key []byt
 		}
 	}
 	return firstErr
+}
+
+// countingWriter forwards Write calls to w and reports the number of bytes
+// actually accepted to add. Bridge wraps the destination side of each
+// io.Copy so the count reflects bytes that crossed the bridge end-to-end.
+type countingWriter struct {
+	w   io.Writer
+	add func(uint64)
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	if n > 0 {
+		c.add(uint64(n))
+	}
+	return n, err
 }
 
 // isExpectedClose suppresses the family of post-Close errors we get from

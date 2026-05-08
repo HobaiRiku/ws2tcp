@@ -82,6 +82,17 @@ export const useRuntimeStore = defineStore('runtime', () => {
     }
   }
 
+  // 后端 events.Bus 在内存里保留最近 200 条非 log 事件; 这里拉一次,
+  // 让"最新事件"列表在用户刷新页面 / 重登后仍能看到 app.started /
+  // server.listening 这些一次性的启动事件.
+  async function loadRecentEvents() {
+    const [err, list] = await api.get<EventMessage[]>('/api/events/recent')
+    if (err || !list) return
+    // 后端给的是 oldest-first; 列表头是最新, 所以反序合并.
+    const ordered = [...list].reverse().slice(0, MAX_EVENTS)
+    recentEvents.value = ordered
+  }
+
   function pushEvent(event: EventMessage) {
     recentEvents.value = [event, ...recentEvents.value].slice(0, MAX_EVENTS)
   }
@@ -138,6 +149,19 @@ export const useRuntimeStore = defineStore('runtime', () => {
       return
     }
 
+    if (event.topic === 'tunnel.removed') {
+      const client = readString(event.data, 'client')
+      const tunnel = readString(event.data, 'tunnel')
+      if (!client || !tunnel) return
+      const key = tunnelKey(client, tunnel)
+      if (key in tunnelStatusMap.value) {
+        const next = { ...tunnelStatusMap.value }
+        delete next[key]
+        tunnelStatusMap.value = next
+      }
+      return
+    }
+
     if (event.topic === 'server.conn.opened') {
       applyServerConnectionDelta(readString(event.data, 'client_id'), 1)
       return
@@ -175,6 +199,7 @@ export const useRuntimeStore = defineStore('runtime', () => {
     closedManually = false
     clearReconnectTimer()
     startPolling()
+    loadRecentEvents()
 
     socket = new WebSocket(buildEventURL(token))
     socket.onopen = () => {
@@ -229,6 +254,7 @@ export const useRuntimeStore = defineStore('runtime', () => {
     connect,
     disconnect,
     tunnelStatus,
-    onLog
+    onLog,
+    loadRecentEvents
   }
 })

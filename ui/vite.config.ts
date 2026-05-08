@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import VueDevTools from 'vite-plugin-vue-devtools'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath, URL } from 'node:url'
 
@@ -30,6 +31,12 @@ export default defineConfig(({ mode }) => {
             isCustomElement: tag => tag.startsWith('fluent-')
           }
         }
+      }),
+      // vue-devtools 浮窗 + "Open in editor": 在 DevTools 面板里点组件树/
+      // 元素跳到源文件, 默认调 `code` (VSCode CLI). 仅在 dev 启用, build
+      // 阶段插件自身会跳过 (apply='serve').
+      VueDevTools({
+        launchEditor: 'code'
       }),
       VitePWA({
         registerType: 'autoUpdate',

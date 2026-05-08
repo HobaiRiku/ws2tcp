@@ -25,6 +25,19 @@ export function formatDuration(seconds: number): string {
   return parts.join(' ') || '0s'
 }
 
+// 用户本地时区下的 HH:mm:ss; 跨日时显示 MM-DD HH:mm:ss.
+// 后端 emit 时间已是 UTC, 浏览器 new Date 会转本地.
+export function formatLocalTime(value?: string | Date): string {
+  if (!value) return '—'
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  const pad = (n: number) => n.toString().padStart(2, '0')
+  const hms = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  const sameDay = date.toDateString() === new Date().toDateString()
+  if (sameDay) return hms
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${hms}`
+}
+
 export function formatTimeAgo(value?: string | Date): string {
   if (!value) return '—'
   const date = value instanceof Date ? value : new Date(value)

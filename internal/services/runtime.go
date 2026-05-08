@@ -13,8 +13,15 @@ import (
 // v1 keeps it simple — a global atomic counter pair plus per-identity
 // connection gauges. Per-tunnel telemetry lands when core/client wires up.
 type Runtime struct {
-	bytesIn  atomic.Uint64
-	bytesOut atomic.Uint64
+	// Counters are kept per-role: a single ws2tcp process can run both the
+	// server subsystem and the client manager, and the same byte would be
+	// counted twice (once on each side of the bridge) if there were only one
+	// pair. Server counters reflect traffic seen by the WS upgrade handler;
+	// client counters reflect traffic seen by tunnels.
+	serverBytesIn  atomic.Uint64
+	serverBytesOut atomic.Uint64
+	clientBytesIn  atomic.Uint64
+	clientBytesOut atomic.Uint64
 
 	mu        sync.RWMutex
 	perClient map[string]int32 // identity ID -> live connections
@@ -41,13 +48,18 @@ func NewRuntime() *Runtime {
 	}
 }
 
-// AddBytesIn / AddBytesOut accumulate transfer counters.
-func (rt *Runtime) AddBytesIn(n uint64)  { rt.bytesIn.Add(n) }
-func (rt *Runtime) AddBytesOut(n uint64) { rt.bytesOut.Add(n) }
+// Per-role byte accumulators. Server upgrade and client tunnel each call
+// their own pair so the dashboard can distinguish "served traffic" from
+// "tunneled traffic" without double-counting the same packet.
+func (rt *Runtime) AddServerBytesIn(n uint64)  { rt.serverBytesIn.Add(n) }
+func (rt *Runtime) AddServerBytesOut(n uint64) { rt.serverBytesOut.Add(n) }
+func (rt *Runtime) AddClientBytesIn(n uint64)  { rt.clientBytesIn.Add(n) }
+func (rt *Runtime) AddClientBytesOut(n uint64) { rt.clientBytesOut.Add(n) }
 
-// Totals returns (bytesIn, bytesOut) atomically.
-func (rt *Runtime) Totals() (uint64, uint64) {
-	return rt.bytesIn.Load(), rt.bytesOut.Load()
+// Totals returns the four counters: (serverIn, serverOut, clientIn, clientOut).
+func (rt *Runtime) Totals() (uint64, uint64, uint64, uint64) {
+	return rt.serverBytesIn.Load(), rt.serverBytesOut.Load(),
+		rt.clientBytesIn.Load(), rt.clientBytesOut.Load()
 }
 
 // IncClient / DecClient adjust the per-identity live connection gauge.
@@ -123,6 +135,15 @@ func (rt *Runtime) DecTunnelConnections(client, tunnel string) {
 	}
 	current.UpdatedAt = time.Now().UTC()
 	rt.perTunnel[key] = current
+}
+
+// RemoveTunnel drops the runtime entry for a tunnel that's no longer
+// desired (profile renamed/deleted, tunnel removed). Idempotent.
+func (rt *Runtime) RemoveTunnel(client, tunnel string) {
+	key := clientTunnelKey(client, tunnel)
+	rt.mu.Lock()
+	delete(rt.perTunnel, key)
+	rt.mu.Unlock()
 }
 
 func (rt *Runtime) TunnelStatuses() []TunnelStatus {

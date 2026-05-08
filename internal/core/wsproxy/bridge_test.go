@@ -19,7 +19,7 @@ func TestBridgePlain(t *testing.T) {
 	tcpA, tcpB := pair()
 
 	go func() {
-		_ = Bridge(context.Background(), wsB, tcpB, false, nil)
+		_ = Bridge(context.Background(), wsB, tcpB, false, nil, Counters{})
 	}()
 
 	// Write on the "client" tcp end -> should appear on the WS peer.
@@ -43,7 +43,7 @@ func TestBridgeEncryptedRoundTrip(t *testing.T) {
 	bridgeDone := make(chan struct{})
 	go func() {
 		defer close(bridgeDone)
-		_ = Bridge(context.Background(), wsB, tcpB, true, []byte(k32))
+		_ = Bridge(context.Background(), wsB, tcpB, true, []byte(k32), Counters{})
 	}()
 
 	// Send plaintext on tcp side; on wsA we should observe the encrypted
@@ -90,7 +90,7 @@ func TestBridgeContextCancel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- Bridge(ctx, wsB, tcpB, false, nil) }()
+	go func() { done <- Bridge(ctx, wsB, tcpB, false, nil, Counters{}) }()
 
 	cancel()
 	select {

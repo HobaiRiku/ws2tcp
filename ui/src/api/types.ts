@@ -26,6 +26,10 @@ export type ServerClient = {
 export type ServerStats = {
   bytes_in: number
   bytes_out: number
+  server_bytes_in: number
+  server_bytes_out: number
+  client_bytes_in: number
+  client_bytes_out: number
   uptime_seconds: number
   client_connections: Record<string, number>
 }

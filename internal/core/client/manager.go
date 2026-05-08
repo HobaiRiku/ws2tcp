@@ -85,11 +85,16 @@ func (m *Manager) reconcile() {
 	for key, rt := range m.running {
 		want, ok := desired[key]
 		if !ok {
-			m.stopLocked(key)
+			// Profile / tunnel deleted or renamed — drop the runtime entry
+			// so the dashboard stops showing a stale row, and emit a
+			// removed event so streaming clients can prune locally.
+			m.stopLocked(key, true)
 			continue
 		}
 		if !reflect.DeepEqual(rt.cfg, want.Tunnel) || !reflect.DeepEqual(rt.ep, want.Endpoint) || !reflect.DeepEqual(rt.auth, want.Credentials) {
-			m.stopLocked(key)
+			// In-place change: startLocked below will overwrite the
+			// runtime row, no need to remove it first.
+			m.stopLocked(key, false)
 		}
 	}
 
@@ -165,7 +170,7 @@ func (m *Manager) startLocked(binding services.ClientTunnelBinding) {
 	}()
 }
 
-func (m *Manager) stopLocked(name string) {
+func (m *Manager) stopLocked(name string, drop bool) {
 	rt, ok := m.running[name]
 	if !ok {
 		return
@@ -173,13 +178,23 @@ func (m *Manager) stopLocked(name string) {
 	rt.cancel()
 	<-rt.done
 	delete(m.running, name)
+	if drop {
+		m.runtime.RemoveTunnel(rt.client, rt.cfg.Name)
+		m.events.Emit("tunnel.removed", map[string]any{
+			"client": rt.client,
+			"tunnel": rt.cfg.Name,
+		})
+	}
 }
 
 func (m *Manager) shutdownAll() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for name := range m.running {
-		m.stopLocked(name)
+		// Process exit — keep runtime entries (state will read "stopped"
+		// after Run returns); operator-driven config edits are the only
+		// reason to fully forget a tunnel.
+		m.stopLocked(name, false)
 	}
 }
 

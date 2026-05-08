@@ -57,6 +57,10 @@ export default {
     uptime: 'Uptime',
     bytesIn: 'Bytes in',
     bytesOut: 'Bytes out',
+    serverBytesIn: 'Server in',
+    serverBytesOut: 'Server out',
+    clientBytesIn: 'Client in',
+    clientBytesOut: 'Client out',
     activeConnections: 'Active connections',
     listeningTunnels: 'Listening tunnels',
     errorTunnels: 'Tunnel errors',
@@ -73,8 +77,13 @@ export default {
     emptyTunnels: 'No tunnels reporting yet',
     emptyEvents: 'Waiting for new events…',
     eventTunnelState: 'Tunnel state changed',
+    eventTunnelRemoved: 'Tunnel removed',
     eventConnOpened: 'Server connection opened',
-    eventConnClosed: 'Server connection closed'
+    eventConnClosed: 'Server connection closed',
+    eventAppStarted: 'App started',
+    eventServerListening: 'Server listening',
+    eventApiListening: 'Management API listening',
+    eventClientManagerStarted: 'Client manager started'
   },
   endpoints: {
     title: 'Endpoints',

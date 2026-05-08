@@ -68,9 +68,13 @@ a {
 }
 
 .shell {
-  min-height: 100%;
+  /* tabs 已合到 header 里, 现在三行: header / main / footer.
+   * 用 100% 让 grid track 真正限定在视口高度内, minmax(0,1fr) 让中间 main
+   * 行可被压缩 — 这是让内部 dashboard 用 flex:1 + overflow:auto 滚动起来
+   * 的前提. 用 min-height:100% 会撑出全局滚动条. */
+  height: 100%;
   display: grid;
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 1rem;
   padding: 1.25rem;
 }
@@ -87,16 +91,21 @@ a {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.25rem 1.5rem;
+  padding: 0.5rem 1rem;
   box-shadow: var(--shadow);
   display: flex;
-  justify-content: space-between;
   align-items: center;
   gap: 1rem;
+  flex-wrap: nowrap;
+}
+
+/* 把 meta (徽章 + 语言 + 退出) 推到右侧, brand 和 tabs 留在左侧紧挨 */
+.shell-header .shell-meta {
+  margin-left: auto;
 }
 
 .brand-mark {
-  font-size: 1.5rem;
+  font-size: 1.15rem;
   font-weight: 800;
   letter-spacing: -0.04em;
 }
@@ -112,35 +121,43 @@ a {
 .shell-meta {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+  gap: 0.6rem;
+  flex-wrap: nowrap;
   justify-content: flex-end;
 }
 
 .shell-tabs {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+  align-items: center;
 }
 
 .shell-tabs a {
   background: transparent;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   color: var(--text-muted);
   border-radius: 999px;
-  padding: 0.7rem 1rem;
+  padding: 0.35rem 0.85rem;
   font-weight: 600;
+  font-size: 0.9rem;
 }
 
 .shell-tabs a.router-link-active {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
   color: var(--accent);
-  box-shadow: var(--shadow);
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .shell-main {
   width: min(1240px, 100%);
   margin: 0 auto;
+  /* 跟着 .shell grid track (minmax(0,1fr)) 一起被限定到剩余视口高度,
+   * 内部用 flex 把 .content-panel 撑满. */
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .content-panel {
@@ -149,6 +166,12 @@ a {
   border-radius: calc(var(--radius) + 4px);
   box-shadow: var(--shadow);
   padding: 1.5rem;
+  /* 让 dashboard-page 等 flex:1 子项有处可填; 其它页面是 .page (grid),
+   * 自然撑高即可, 多余空白在面板里, 不会影响视觉. */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .shell-footer {
@@ -1042,7 +1065,6 @@ fluent-button.danger {
   }
 
   .shell-footer,
-  .shell-header,
   .page-header,
   .section-head,
   .event-row {

@@ -6,6 +6,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { currentLocale, localeOptions, setLocale, type LocaleKey } from '@/i18n'
+import IconBtn from '@/components/IconBtn.vue'
 
 const auth = useAuthStore()
 const runtime = useRuntimeStore()
@@ -44,10 +45,12 @@ function switchLocale(event: Event) {
 <template>
   <div class="shell">
     <header class="shell-header">
-      <div>
-        <div class="brand-mark">{{ t('shell.brand') }}</div>
-        <div class="shell-subtitle">{{ t('shell.subtitle') }}</div>
-      </div>
+      <div class="brand-mark">{{ t('shell.brand') }}</div>
+      <nav class="shell-tabs" aria-label="Main sections">
+        <router-link v-for="tab in tabs" :key="tab.to" :to="tab.to">
+          {{ t(`shell.${tab.key}`) }}
+        </router-link>
+      </nav>
       <div class="shell-meta">
         <span class="badge nowrap" :class="runtime.connected ? 'badge-ok' : 'badge-warn'">
           {{ runtime.connected ? t('shell.streamConnected') : t('shell.streamReconnecting') }}
@@ -55,15 +58,9 @@ function switchLocale(event: Event) {
         <select class="locale-select" :value="currentLocale()" @change="switchLocale">
           <option v-for="opt in localeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
-        <fluent-button appearance="stealth" @click="logout">{{ t('shell.signOut') }}</fluent-button>
+        <IconBtn icon="logout" :title="t('shell.signOut')" @click="logout" />
       </div>
     </header>
-
-    <nav class="shell-tabs" aria-label="Main sections">
-      <router-link v-for="tab in tabs" :key="tab.to" :to="tab.to">
-        {{ t(`shell.${tab.key}`) }}
-      </router-link>
-    </nav>
 
     <main class="shell-main">
       <div class="content-panel">
