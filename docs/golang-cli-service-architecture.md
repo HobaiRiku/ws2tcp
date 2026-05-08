@@ -1,43 +1,43 @@
 ````md
 # Go CLI Service Starter Architecture
 
-## 项目目标
+## Project Goals
 
-构建一个基于 Golang 的跨平台 CLI + Daemon 服务框架，具备以下能力：
+Build a cross-platform Golang CLI + daemon service framework with the following capabilities:
 
-- 现代化 CLI 参数与命令管理
-- 跨平台后台服务注册/卸载/启动/停止
-- 内置 HTTP Server，提供 API 与 Web UI
-- 前端静态资源嵌入二进制文件
-- 跨平台配置与数据目录管理
-- 单二进制分发与构建发布体系
+- Modern CLI command and argument management
+- Cross-platform background service install / uninstall / start / stop
+- Built-in HTTP server for API and Web UI
+- Frontend static assets embedded into the binary
+- Cross-platform config and data directory management
+- Single-binary distribution and release workflow
 
-适用于：
+Suitable for:
 
-- 自托管工具
-- 内网穿透客户端
-- NAS 管理工具
-- 小型 Agent
-- 本地服务型应用
+- Self-hosted tools
+- Intranet tunneling clients
+- NAS management tools
+- Small agents
+- Local service-style applications
 
 ---
 
-# 技术选型
+# Technology Choices
 
 ## CLI
 
 ### Cobra
 
-用于构建命令结构与参数管理。
+Used to build the command tree and argument management.
 
-能力：
+Capabilities:
 
-- 子命令
-- flags
-- help
-- shell completion
+- Subcommands
+- Flags
+- Help
+- Shell completion
 
-示例：
+Example:
 
 ```bash
 myapp run
@@ -47,7 +47,7 @@ myapp stop
 myapp version
 ````
 
-依赖：
+Dependency:
 
 ```bash
 github.com/spf13/cobra
@@ -55,22 +55,22 @@ github.com/spf13/cobra
 
 ---
 
-## 配置管理
+## Configuration Management
 
 ### Viper
 
-用于读取：
+Used to read:
 
 * yaml
 * json
 * env
 
-能力：
+Capabilities:
 
-* 配置热加载（可选）
-* 多来源配置
+* Optional hot reload
+* Multiple configuration sources
 
-依赖：
+Dependency:
 
 ```bash
 github.com/spf13/viper
@@ -78,17 +78,17 @@ github.com/spf13/viper
 
 ---
 
-## 后台服务注册
+## Background Service Registration
 
 ### kardianos/service
 
-统一管理：
+Provides a unified layer for:
 
 * Linux systemd
 * macOS launchd
 * Windows Service
 
-命令：
+Commands:
 
 ```bash
 myapp install
@@ -97,7 +97,7 @@ myapp start
 myapp stop
 ```
 
-依赖：
+Dependency:
 
 ```bash
 github.com/kardianos/service
@@ -109,21 +109,21 @@ github.com/kardianos/service
 
 ### Chi
 
-轻量级 HTTP Router。
+A lightweight HTTP router.
 
-能力：
+Capabilities:
 
 * middleware
 * route grouping
 * REST API
 
-依赖：
+Dependency:
 
 ```bash
 github.com/go-chi/chi/v5
 ```
 
-示例：
+Examples:
 
 * /health
 * /api/*
@@ -135,31 +135,39 @@ github.com/go-chi/chi/v5
 
 ### Go embed
 
-将前端打包产物嵌入二进制。
+Embeds frontend build artifacts into the binary.
 
-方式：
+Approach:
 
-构建产物由 `ui/` 生成后复制到 `internal/web/static/` 再嵌入二进制。
+Build artifacts are produced from `ui/`, then copied into `internal/web/static/`, and embedded into the binary.
 
-能力：
+Capabilities:
 
-* 单文件部署
-* 无外部静态目录依赖
+* Single-file deployment
+* No dependency on an external static directory
+* Works well with a PWA Service Worker
 
-适合：
+Suitable for:
 
 * React
 * Vue
 * Svelte
 * Vite
 
+Additional constraints:
+
+* Production build output should consistently go to `internal/web/static/`
+* Development mode should not enable the Service Worker, to avoid interfering with HMR
+* Release builds can integrate `vite-plugin-pwa` on the frontend side to generate `sw.js` and a precache manifest
+* The backend is only responsible for serving static assets and the `index.html` fallback, not for implementing static update detection logic in Go
+
 ---
 
-## 配置与数据目录
+## Config and Data Directories
 
 ### xdg
 
-统一管理跨平台目录：
+Used to manage cross-platform directories consistently:
 
 Linux:
 
@@ -174,24 +182,24 @@ Windows:
 
 * AppData
 
-依赖：
+Dependency:
 
 ```bash
 github.com/adrg/xdg
 ```
 
-目录职责：
+Directory responsibilities:
 
 ## config
 
-保存：
+Stores:
 
 * config.yaml
 * secrets
 
 ## data
 
-保存：
+Stores:
 
 * sqlite
 * logs
@@ -199,18 +207,18 @@ github.com/adrg/xdg
 
 ---
 
-## 日志
+## Logging
 
-推荐：
+Recommended:
 
-### slog（标准库）
+### slog (standard library)
 
-能力：
+Capabilities:
 
 * structured logging
 * json/text output
 
-日志目录：
+Log directory:
 
 ```bash
 data/logs/
@@ -218,36 +226,36 @@ data/logs/
 
 ---
 
-## 本地数据库（可选）
+## Local Database (Optional)
 
-推荐：
+Recommended:
 
 ### sqlite
 
-适合：
+Suitable for:
 
 * metadata
 * jobs
 * cache
 * local state
 
-推荐：
+Recommended:
 
 ```bash
 modernc.org/sqlite
 ```
 
-纯 Go，无 CGO。
+Pure Go, no CGO.
 
 ---
 
-# 构建系统
+# Build System
 
 ## Makefile
 
-统一本地开发与构建。
+Unifies local development and build tasks.
 
-常用命令：
+Common commands:
 
 ```bash
 make run
@@ -257,7 +265,7 @@ make test
 make release
 ```
 
-职责：
+Responsibilities:
 
 * build frontend
 * go build
@@ -268,26 +276,26 @@ make release
 
 ## Goreleaser
 
-用于跨平台发布。
+Used for cross-platform releases.
 
-生成：
+Targets:
 
 * linux
 * darwin
 * windows
 
-架构：
+Architectures:
 
 * amd64
 * arm64
 
-产物：
+Artifacts:
 
 ```bash
 dist/
 ```
 
-能力：
+Capabilities:
 
 * archive
 * checksum
@@ -295,7 +303,7 @@ dist/
 
 ---
 
-# 项目结构
+# Project Structure
 
 ```bash
 myapp/
@@ -328,7 +336,7 @@ myapp/
 
 ---
 
-# 核心启动流程
+# Core Startup Flow
 
 ```text
 main
@@ -345,66 +353,66 @@ main
 
 ---
 
-# CLI 生命周期
+# CLI Lifecycle
 
-## 开发模式
+## Development Mode
 
 ```bash
 myapp run
 ```
 
-前台运行。
+Runs in the foreground.
 
-用途：
+Use cases:
 
-* 本地调试
-* 开发
+* local debugging
+* development
 
 ---
 
-## 安装服务
+## Install Service
 
 ```bash
 myapp install
 ```
 
-注册系统服务。
+Registers the system service.
 
 ---
 
-## 启动服务
+## Start Service
 
 ```bash
 myapp start
 ```
 
-后台运行。
+Runs in the background.
 
 ---
 
-## 停止服务
+## Stop Service
 
 ```bash
 myapp stop
 ```
 
-停止后台服务。
+Stops the background service.
 
 ---
 
-## 卸载服务
+## Uninstall Service
 
 ```bash
 myapp uninstall
 ```
 
-移除系统注册。
+Removes the system service registration.
 
 ---
 
-# HTTP 服务职责
+# HTTP Service Responsibilities
 
-提供：
+Provides:
 
 ## API
 
@@ -412,7 +420,7 @@ myapp uninstall
 /api/*
 ```
 
-例如：
+Examples:
 
 * health
 * config
@@ -423,31 +431,95 @@ myapp uninstall
 
 ## Web UI
 
-静态资源：
+Static resources:
 
 ```bash
 /
 ```
 
-来自 embed filesystem。
+Served from the embedded filesystem.
+
+Recommended layering:
+
+* `ui/` handles the SPA, routing, PWA registration, and static update strategy
+* `internal/web/` handles embedding, static file serving, and the `/` fallback
+* `/api/*` should always be treated as an online data source and must not be cached by the Service Worker
+
+### PWA Design
+
+If the Web UI needs to be installable as a desktop-style application, it is recommended to integrate the PWA at the frontend build layer instead of pushing caching and upgrade logic into the Go service.
+
+Recommended approach:
+
+* Use `vite-plugin-pwa`
+* Set `registerType = autoUpdate`
+* Set `injectRegister = false`, and register it explicitly at runtime
+* Use Workbox to precache frontend shell assets (`index.html`, `assets/*`, manifest, icons)
+* Configure `/api/*` as `NetworkOnly`
+
+Why:
+
+* PWA updates are versioned around static assets, not backend process versions
+* Update detection, new Service Worker activation, and page reload all happen in the browser
+* The Go service only needs to serve the latest static assets and does not need to understand the lifecycle of old browser caches
+
+### PWA Static Update Strategy
+
+For an admin console that should automatically reload when new static assets are available, the following strategy is recommended:
+
+1. Register the Service Worker after the router is ready
+2. Run `registration.update()` immediately after the first successful registration
+3. Trigger another update check when the page becomes visible again
+4. Also run `registration.update()` periodically on a timer
+5. Automatically reload the page when the new Service Worker takes control (`controllerchange`)
+
+Recommended constraints:
+
+* Keep polling intervals at the minute level to avoid unnecessary request storms
+* Do not trigger an extra reload on the very first PWA installation just because the first controller appears
+* Automatic reload should only be used for static shell updates; if the user may be in the middle of a form submission, prompt mode may be safer
+
+### Reference Implementation Boundaries
+
+Frontend runtime responsibilities:
+
+* Register `virtual:pwa-register`
+* Listen to `controllerchange`
+* Listen to `visibilitychange`
+* Periodically call `registration.update()`
+* Call `updateSW(true)` when a new version is found, or reload after the new controller becomes active
+
+Build-layer responsibilities:
+
+* Generate `manifest.webmanifest`
+* Generate `sw.js`
+* Only place cacheable static resources into precache
+
+Backend responsibilities:
+
+* Serve the latest static artifacts
+* Return `index.html` for SPA routes
+* Preserve normal HTTP / WebSocket semantics for `/api/*` and do not involve them in PWA caching
+
+This keeps responsibilities clear: the browser controls PWA updates, and the Go service only supplies the artifacts.
 
 ---
 
-# 版本注入
+# Version Injection
 
-构建时注入：
+Injected at build time:
 
 * version
 * commit
 * buildTime
 
-命令：
+Command:
 
 ```bash
 myapp version
 ```
 
-输出：
+Output:
 
 ```bash
 version: 1.0.0
@@ -457,27 +529,30 @@ built: 2026-05-03T00:00:00Z
 
 ---
 
-# 后续可扩展能力
+# Future Extensibility
 
-可扩展：
+Can be extended with:
 
 * websocket
 * auth token
 * plugin system
 * auto update
+* PWA offline shell
+* PWA static asset auto refresh
 * task scheduler
 * metrics
 * pprof
 
 ---
 
-# 推荐最终技术栈
+# Recommended Final Stack
 
 * cobra
 * viper
 * kardianos/service
 * chi
 * embed
+* vite-plugin-pwa / workbox
 * xdg
 * sqlite
 * slog
@@ -486,14 +561,14 @@ built: 2026-05-03T00:00:00Z
 
 ---
 
-# 设计原则
+# Design Principles
 
-1. 单二进制部署
-2. 跨平台一致行为
-3. CLI 优先
-4. Web UI 为附加能力
-5. 配置与数据隔离
-6. 最小外部依赖
+1. Single-binary deployment
+2. Consistent cross-platform behavior
+3. CLI-first
+4. Web UI as an additional capability
+5. Separation of config and data
+6. Minimal external dependencies
 
 ```
 ```
