@@ -33,8 +33,8 @@ export default {
   shell: {
     brand: 'ws2tcp',
     subtitle: 'Tunnel manager',
-    streamConnected: 'Live stream connected',
-    streamReconnecting: 'Live stream reconnecting',
+    streamConnected: 'connected',
+    streamReconnecting: 'reconnecting',
     signOut: 'Sign out',
     language: 'Language',
     overview: 'Overview',

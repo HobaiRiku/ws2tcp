@@ -74,7 +74,6 @@ function describeEvent(topic: string) {
         <div class="section-head">
           <div>
             <h2>{{ t('dashboard.clientTunnels') }}</h2>
-            <p>{{ t('dashboard.clientTunnelsDesc') }}</p>
           </div>
         </div>
 
@@ -112,7 +111,6 @@ function describeEvent(topic: string) {
         <div class="section-head">
           <div>
             <h2>{{ t('dashboard.recentEvents') }}</h2>
-            <p>{{ t('dashboard.recentEventsDesc') }}</p>
           </div>
         </div>
 

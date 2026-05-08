@@ -33,8 +33,8 @@ export default {
   shell: {
     brand: 'ws2tcp',
     subtitle: '隧道管理',
-    streamConnected: '事件流已连接',
-    streamReconnecting: '事件流重连中',
+    streamConnected: '已连接',
+    streamReconnecting: '重连中',
     signOut: '退出',
     language: '语言',
     overview: '概览',
