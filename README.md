@@ -79,6 +79,11 @@ app:
   http_auth: true
   http_token: 7c2d4b...e1               # 首次 init 自动随机生成
   log_level: info
+  log_console: false                   # 同时镜像到 stderr/stdout（默认关闭）
+  log_max_size_mb: 20
+  log_max_backups: 10
+  log_max_age_days: 14
+  log_compress: false
 
 server:
   listen: 0.0.0.0:3005
@@ -130,6 +135,7 @@ ws2tcp install      # 注册为 OS 服务 (kardianos)
 ws2tcp uninstall    # 注销
 ws2tcp start/stop   # 通过 OS 服务管理器启停
 ws2tcp status       # 当前服务状态
+ws2tcp tail         # 最近 10 条日志 + 实时跟踪
 
 ws2tcp server …         # server show|enable|disable|update
 ws2tcp server-client …  # server-side client identity CRUD
@@ -141,6 +147,13 @@ ws2tcp version      # 版本 + 构建信息
 ```
 
 所有命令都接受 `--home <path>` 覆盖 `WS2TCP_HOME` 环境变量。
+
+日志默认同时写入两处：
+
+- `logs/ws2tcp.log`（带内建翻转与保留策略）
+- 进程 stderr/stdout（便于 `ws2tcp run`、launchd、systemd、SCM 接管）
+
+`app.log_console` 默认是 `false`。只有在你明确希望同时把日志镜像到 stderr/stdout（例如前台调试）时再打开；系统服务场景建议继续保持关闭，只保留 `logs/` 这一套可控日志。
 
 ---
 

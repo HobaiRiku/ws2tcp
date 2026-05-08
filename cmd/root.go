@@ -40,6 +40,7 @@ func Root() *cobra.Command {
 
 	root.AddCommand(
 		runCmd(),
+		tailCmd(),
 		installCmd(),
 		uninstallCmd(),
 		startCmd(),

@@ -32,6 +32,7 @@ type Options struct {
 	Runtime       *services.Runtime
 	Auth          *services.AuthService
 	Events        *events.Bus
+	LogFile       string
 	LogTap        *applog.Tap
 	RequireAuth   bool
 	Logger        *slog.Logger
@@ -559,13 +560,21 @@ func NewRouter(opts Options) *gin.Engine {
 	})
 
 	api.GET("/logs/recent", readOnly, func(c *gin.Context) {
-		if opts.LogTap == nil {
-			c.JSON(http.StatusOK, gin.H{"records": []applog.Record{}})
-			return
-		}
 		match := buildLogFilter(c)
 		limit := parseLimit(c.Query("limit"), 200, 2000)
-		records := opts.LogTap.Recent(match, limit)
+		var (
+			records []applog.Record
+			err     error
+		)
+		if strings.TrimSpace(opts.LogFile) != "" {
+			records, err = applog.ReadRecent(opts.LogFile, match, limit)
+			if err != nil {
+				writeError(c, http.StatusInternalServerError, "READ_LOGS_FAILED", err)
+				return
+			}
+		} else if opts.LogTap != nil {
+			records = opts.LogTap.Recent(match, limit)
+		}
 		c.JSON(http.StatusOK, gin.H{"records": records})
 	})
 

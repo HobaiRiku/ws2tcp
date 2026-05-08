@@ -73,6 +73,15 @@ func (c *Config) applyZeroDefaults() {
 	if c.App.HTTPListen == "" {
 		c.App.HTTPListen = "127.0.0.1:7321"
 	}
+	if c.App.LogMaxSizeMB == 0 {
+		c.App.LogMaxSizeMB = 20
+	}
+	if c.App.LogMaxBackups == 0 {
+		c.App.LogMaxBackups = 10
+	}
+	if c.App.LogMaxAgeDays == 0 {
+		c.App.LogMaxAgeDays = 14
+	}
 }
 
 func (c *Config) dropEmptyPlaceholders() {

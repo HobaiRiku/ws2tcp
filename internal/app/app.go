@@ -132,6 +132,7 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 		Runtime:       rt,
 		Auth:          auth,
 		Events:        bus,
+		LogFile:       opts.Paths.LogFile(),
 		LogTap:        opts.LogTap,
 		RequireAuth:   opts.Config.App.HTTPAuth,
 		Logger:        opts.Logger.With("component", "api"),

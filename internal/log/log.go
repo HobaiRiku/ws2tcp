@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Options controls Init.
@@ -21,6 +23,11 @@ type Options struct {
 	File string
 	// Console mirrors records to stderr in text form. Always on when File is empty.
 	Console bool
+
+	MaxSizeMB  int
+	MaxBackups int
+	MaxAgeDays int
+	Compress   bool
 }
 
 // Init builds an *slog.Logger and returns the in-memory Tap (for the
@@ -39,12 +46,16 @@ func Init(opts Options) (*slog.Logger, *Tap, io.Closer, error) {
 		if err := os.MkdirAll(filepath.Dir(opts.File), 0o700); err != nil {
 			return nil, nil, nil, fmt.Errorf("mkdir log dir: %w", err)
 		}
-		f, err := os.OpenFile(opts.File, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
-		if err != nil {
-			return nil, nil, nil, fmt.Errorf("open %s: %w", opts.File, err)
+		rotator := &lumberjack.Logger{
+			Filename:   opts.File,
+			MaxSize:    positiveOrDefault(opts.MaxSizeMB, 20),
+			MaxBackups: positiveOrDefault(opts.MaxBackups, 10),
+			MaxAge:     positiveOrDefault(opts.MaxAgeDays, 14),
+			LocalTime:  true,
+			Compress:   opts.Compress,
 		}
-		handlers = append(handlers, slog.NewJSONHandler(f, hopts))
-		closer = f
+		handlers = append(handlers, slog.NewJSONHandler(rotator, hopts))
+		closer = rotator
 	}
 	if opts.Console || opts.File == "" {
 		handlers = append(handlers, slog.NewTextHandler(os.Stderr, hopts))
@@ -53,7 +64,16 @@ func Init(opts Options) (*slog.Logger, *Tap, io.Closer, error) {
 	tap := NewTap(500)
 	handlers = append(handlers, tap)
 
-	return slog.New(fanoutHandler(handlers)), tap, closer, nil
+	logger := slog.New(fanoutHandler(handlers))
+	slog.SetDefault(logger)
+	return logger, tap, closer, nil
+}
+
+func positiveOrDefault(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
 
 func parseLevel(s string) slog.Level {

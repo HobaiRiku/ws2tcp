@@ -43,6 +43,12 @@ type AppConfig struct {
 	HTTPAuth   bool   `yaml:"http_auth" json:"http_auth"`
 	HTTPToken  string `yaml:"http_token" json:"http_token"`
 	LogLevel   string `yaml:"log_level" json:"log_level"`
+	LogConsole bool   `yaml:"log_console" json:"log_console"`
+
+	LogMaxSizeMB  int  `yaml:"log_max_size_mb" json:"log_max_size_mb"`
+	LogMaxBackups int  `yaml:"log_max_backups" json:"log_max_backups"`
+	LogMaxAgeDays int  `yaml:"log_max_age_days" json:"log_max_age_days"`
+	LogCompress   bool `yaml:"log_compress" json:"log_compress"`
 }
 
 // ServerConfig is the ws2tcp-server role (terminate WS, dial target TCP).

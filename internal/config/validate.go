@@ -39,6 +39,15 @@ func (c *Config) validateApp() []string {
 	default:
 		errs = append(errs, fmt.Sprintf("app.log_level %q invalid (debug|info|warn|error)", c.App.LogLevel))
 	}
+	if c.App.LogMaxSizeMB <= 0 {
+		errs = append(errs, fmt.Sprintf("app.log_max_size_mb must be > 0 (got %d)", c.App.LogMaxSizeMB))
+	}
+	if c.App.LogMaxBackups <= 0 {
+		errs = append(errs, fmt.Sprintf("app.log_max_backups must be > 0 (got %d)", c.App.LogMaxBackups))
+	}
+	if c.App.LogMaxAgeDays <= 0 {
+		errs = append(errs, fmt.Sprintf("app.log_max_age_days must be > 0 (got %d)", c.App.LogMaxAgeDays))
+	}
 	return errs
 }
 

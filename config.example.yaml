@@ -6,6 +6,11 @@ app:
   http_auth: true                 # require Bearer token from app.http_token
   http_token: change-me-management-token
   log_level: info                 # debug | info | warn | error
+  log_console: false              # mirror process logs to stderr/stdout for foreground/service managers
+  log_max_size_mb: 20             # rotate logs/ws2tcp.log when it grows past this size
+  log_max_backups: 10             # keep at most N rotated files under logs/
+  log_max_age_days: 14            # delete rotated logs older than N days
+  log_compress: false             # gzip rotated log files
 
 # ─────────────────────── server role ───────────────────────
 server:

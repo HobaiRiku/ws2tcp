@@ -55,6 +55,9 @@ server:
 	if cfg.App.HTTPToken != "" {
 		t.Errorf("http_token should default to empty, got %q", cfg.App.HTTPToken)
 	}
+	if cfg.App.LogConsole {
+		t.Error("log_console should default false")
+	}
 }
 
 func TestExplicitFalseOverridesDefault(t *testing.T) {

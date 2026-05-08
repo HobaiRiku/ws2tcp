@@ -186,9 +186,13 @@ func loadOptions(home string, console bool) (app.Options, io.Closer, error) {
 	}
 
 	logger, tap, closer, err := log.Init(log.Options{
-		Level:   cfg.App.LogLevel,
-		File:    p.LogFile(),
-		Console: console,
+		Level:      cfg.App.LogLevel,
+		File:       p.LogFile(),
+		Console:    console || cfg.App.LogConsole,
+		MaxSizeMB:  cfg.App.LogMaxSizeMB,
+		MaxBackups: cfg.App.LogMaxBackups,
+		MaxAgeDays: cfg.App.LogMaxAgeDays,
+		Compress:   cfg.App.LogCompress,
 	})
 	if err != nil {
 		return app.Options{}, nil, fmt.Errorf("log init: %w", err)

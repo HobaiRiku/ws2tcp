@@ -190,12 +190,24 @@ func (h *Handler) run(ctx context.Context, ws *websocket.Conn, tcp net.Conn, cmd
 		"target_host": cmd.TargetHost,
 		"target_port": cmd.TargetPort,
 	})
+	h.log.Info("connection opened",
+		"client_id", id.ID,
+		"client_ip", clientIP,
+		"target_host", cmd.TargetHost,
+		"target_port", cmd.TargetPort,
+	)
 	defer h.events.Emit("server.conn.closed", map[string]any{
 		"client_id":   id.ID,
 		"client_ip":   clientIP,
 		"target_host": cmd.TargetHost,
 		"target_port": cmd.TargetPort,
 	})
+	defer h.log.Info("connection closed",
+		"client_id", id.ID,
+		"client_ip", clientIP,
+		"target_host", cmd.TargetHost,
+		"target_port", cmd.TargetPort,
+	)
 
 	netConn := websocket.NetConn(ctx, ws, websocket.MessageBinary)
 	defer ws.Close(websocket.StatusNormalClosure, "")

@@ -73,6 +73,39 @@ func TestAuthEndpointsUseConfiguredToken(t *testing.T) {
 	}
 }
 
+func TestLogRecentReadsRetainedFiles(t *testing.T) {
+	router, p, token, _, _ := newTestRouter(t, true)
+
+	rotated := filepath.Join(p.Logs(), "ws2tcp-2026-05-08T09-00-00.000.log")
+	current := p.LogFile()
+	if err := os.WriteFile(rotated, []byte(
+		`{"time":"2026-05-08T09:00:00Z","level":"INFO","msg":"old log","component":"server"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(current, []byte(
+		`{"time":"2026-05-08T09:10:00Z","level":"INFO","msg":"new log","component":"server","client_id":"u1"}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	rr := performJSON(t, router, http.MethodGet, "/api/logs/recent?limit=10&component=server", token, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected recent logs response: %d %s", rr.Code, rr.Body.String())
+	}
+	body := rr.Body.String()
+	if !strings.Contains(body, `"message":"old log"`) || !strings.Contains(body, `"message":"new log"`) {
+		t.Fatalf("expected both retained log records, got: %s", body)
+	}
+
+	rr = performJSON(t, router, http.MethodGet, "/api/logs/recent?client_id=u1", token, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected filtered recent logs response: %d %s", rr.Code, rr.Body.String())
+	}
+	body = rr.Body.String()
+	if strings.Contains(body, `"message":"old log"`) || !strings.Contains(body, `"message":"new log"`) {
+		t.Fatalf("expected client_id filter to keep only current log, got: %s", body)
+	}
+}
+
 func TestClientEndpoints(t *testing.T) {
 	router, p, token, _, runtime := newTestRouter(t, true)
 
@@ -419,6 +452,7 @@ client:
 		Runtime:     runtime,
 		Auth:        services.NewAuthService(reg.HTTPToken),
 		Events:      bus,
+		LogFile:     p.LogFile(),
 		RequireAuth: requireAuth,
 	}), p, testHTTPToken, bus, runtime
 }

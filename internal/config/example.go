@@ -22,27 +22,32 @@ import (
 func Example() *Config {
 	aesKey := randomAESKey()
 	const (
-		serverListen   = "0.0.0.0:3005"
-		wsPath         = "/connect"
-		clientID       = "local"
-		clientSecret   = "local"
-		endpointName   = "local"
-		profileName    = "local"
-		tunnelName     = "local-ssh"
-		tunnelListen   = "127.0.0.1:2222"
-		tunnelHost     = "127.0.0.1"
-		tunnelPort     = 22
-		endpointHost   = "127.0.0.1"
-		endpointPath   = wsPath
+		serverListen = "0.0.0.0:3005"
+		wsPath       = "/connect"
+		clientID     = "local"
+		clientSecret = "local"
+		endpointName = "local"
+		profileName  = "local"
+		tunnelName   = "local-ssh"
+		tunnelListen = "127.0.0.1:2222"
+		tunnelHost   = "127.0.0.1"
+		tunnelPort   = 22
+		endpointHost = "127.0.0.1"
+		endpointPath = wsPath
 	)
 	endpointPort := portFromListen(serverListen, 3005)
 
 	return &Config{
 		App: AppConfig{
-			HTTPListen: "127.0.0.1:7321",
-			HTTPAuth:   true,
-			HTTPToken:  randomHTTPToken(),
-			LogLevel:   "info",
+			HTTPListen:    "127.0.0.1:7321",
+			HTTPAuth:      true,
+			HTTPToken:     randomHTTPToken(),
+			LogLevel:      "info",
+			LogConsole:    false,
+			LogMaxSizeMB:  20,
+			LogMaxBackups: 10,
+			LogMaxAgeDays: 14,
+			LogCompress:   false,
 		},
 		Server: ServerConfig{
 			Enabled:       false,
