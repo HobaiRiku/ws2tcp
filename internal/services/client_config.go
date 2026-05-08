@@ -19,6 +19,7 @@ type EndpointPatch struct {
 }
 
 type ClientProfilePatch struct {
+	Name         *string
 	Endpoint     *string
 	ClientID     *string
 	ClientSecret *string
@@ -142,6 +143,25 @@ func (r *Registry) UpdateClientProfile(name string, patch ClientProfilePatch) er
 		node, err := findConfiguredClientNode(doc, name)
 		if err != nil {
 			return err
+		}
+		if patch.Name != nil && *patch.Name != name {
+			newName := *patch.Name
+			if newName == "" {
+				return fmt.Errorf("client profile name cannot be empty")
+			}
+			client, err := findClientSectionMapping(doc)
+			if err != nil {
+				return err
+			}
+			clients, _, ok := mappingValue(client, "clients")
+			if ok && clients.Kind == yaml.SequenceNode {
+				for _, existing := range clients.Content {
+					if existing != node && clientProfileNodeName(existing) == newName {
+						return fmt.Errorf("client profile %q already exists", newName)
+					}
+				}
+			}
+			setMappingValue(node, "name", scalarString(newName))
 		}
 		if patch.Endpoint != nil {
 			setMappingValue(node, "endpoint", scalarString(*patch.Endpoint))

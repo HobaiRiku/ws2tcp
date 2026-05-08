@@ -118,10 +118,18 @@ async function saveProfile() {
       client_id: dlg.form.client_id,
       client_secret: dlg.form.client_secret
     }
+    if (dlg.form.name && dlg.form.name !== dlg.editing) {
+      payload.name = dlg.form.name
+    }
     const [err] = await api.patch(`/api/client/profiles/${encodeURIComponent(dlg.editing)}`, payload)
     busy.value = false
     if (err) return toast.error(err.message)
-    toast.success(t('clients.profileSaved', { name: dlg.editing }))
+    // 重命名后展开状态用旧 key 失效, 把它迁到新 key 上, 列表刷新前 UI 不闪.
+    if (dlg.form.name && dlg.form.name !== dlg.editing) {
+      expanded[dlg.form.name] = expanded[dlg.editing] ?? false
+      delete expanded[dlg.editing]
+    }
+    toast.success(t('clients.profileSaved', { name: dlg.form.name || dlg.editing }))
   } else {
     const [err] = await api.post('/api/client/profiles', { ...dlg.form, tunnels: [] })
     busy.value = false
@@ -345,11 +353,7 @@ useAutoRefresh(load, 5000)
       <div class="form-grid two-up">
         <label>
           <span class="field-label">{{ t('clients.fieldProfileName') }}</span>
-          <input
-            v-model="profileDialog.form.name"
-            class="text-input"
-            :disabled="!!profileDialog.editing"
-          />
+          <input v-model="profileDialog.form.name" class="text-input" />
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldEndpoint') }}</span>

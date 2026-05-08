@@ -65,6 +65,7 @@ type endpointPatchRequest struct {
 }
 
 type clientProfilePatchRequest struct {
+	Name         *string `json:"name"`
 	Endpoint     *string `json:"endpoint"`
 	ClientID     *string `json:"client_id"`
 	ClientSecret *string `json:"client_secret"`
@@ -264,11 +265,12 @@ func NewRouter(opts Options) *gin.Engine {
 			return
 		}
 		patch := services.ClientProfilePatch{
+			Name:         req.Name,
 			Endpoint:     req.Endpoint,
 			ClientID:     req.ClientID,
 			ClientSecret: req.ClientSecret,
 		}
-		if patch.Endpoint == nil && patch.ClientID == nil && patch.ClientSecret == nil {
+		if patch.Name == nil && patch.Endpoint == nil && patch.ClientID == nil && patch.ClientSecret == nil {
 			writeError(c, http.StatusBadRequest, "EMPTY_PATCH", errors.New("no client profile fields provided"))
 			return
 		}
@@ -276,7 +278,11 @@ func NewRouter(opts Options) *gin.Engine {
 			writeError(c, classifyStatus(err), "UPDATE_CLIENT_PROFILE_FAILED", err)
 			return
 		}
-		profile, _ := opts.Registry.FindClientProfile(c.Param("name"))
+		lookup := c.Param("name")
+		if patch.Name != nil {
+			lookup = *patch.Name
+		}
+		profile, _ := opts.Registry.FindClientProfile(lookup)
 		c.JSON(http.StatusOK, redactClientProfile(profile))
 	})
 	api.DELETE("/client/profiles/:name", clientWrite, func(c *gin.Context) {
