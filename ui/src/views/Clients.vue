@@ -9,7 +9,7 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import Modal from '@/components/Modal.vue'
 import IconBtn from '@/components/IconBtn.vue'
 import LogViewer from '@/components/LogViewer.vue'
-import { eventValue } from '@/utils/forms'
+import { eventNumber, eventValue } from '@/utils/forms'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -354,12 +354,14 @@ useAutoRefresh(load, 5000)
       <div class="form-grid two-up">
         <label>
           <span class="field-label">{{ t('clients.fieldProfileName') }}</span>
-          <input v-model="profileDialog.form.name" class="text-input" />
+          <fluent-text-field
+            :value="profileDialog.form.name"
+            @input="profileDialog.form.name = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldEndpoint') }}</span>
           <fluent-select
-            class="select-input"
             :value="profileDialog.form.endpoint"
             @change="profileDialog.form.endpoint = eventValue($event)"
           >
@@ -370,11 +372,17 @@ useAutoRefresh(load, 5000)
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldClientId') }}</span>
-          <input v-model="profileDialog.form.client_id" class="text-input" />
+          <fluent-text-field
+            :value="profileDialog.form.client_id"
+            @input="profileDialog.form.client_id = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldClientSecret') }}</span>
-          <input v-model="profileDialog.form.client_secret" class="text-input" type="text" />
+          <fluent-text-field
+            :value="profileDialog.form.client_secret"
+            @input="profileDialog.form.client_secret = eventValue($event)"
+          />
         </label>
       </div>
       <template #footer>
@@ -396,23 +404,33 @@ useAutoRefresh(load, 5000)
       <div class="form-grid two-up">
         <label>
           <span class="field-label">{{ t('clients.fieldTunnelName') }}</span>
-          <input
-            v-model="tunnelDialog.form.name"
-            class="text-input"
+          <fluent-text-field
+            :value="tunnelDialog.form.name"
             :disabled="!!tunnelDialog.editing"
+            @input="tunnelDialog.form.name = eventValue($event)"
           />
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldListen') }}</span>
-          <input v-model="tunnelDialog.form.listen" class="text-input" />
+          <fluent-text-field
+            :value="tunnelDialog.form.listen"
+            @input="tunnelDialog.form.listen = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldTargetHost') }}</span>
-          <input v-model="tunnelDialog.form.target_host" class="text-input" />
+          <fluent-text-field
+            :value="tunnelDialog.form.target_host"
+            @input="tunnelDialog.form.target_host = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldTargetPort') }}</span>
-          <input v-model.number="tunnelDialog.form.target_port" class="text-input" type="number" />
+          <fluent-text-field
+            type="number"
+            :value="String(tunnelDialog.form.target_port || '')"
+            @input="tunnelDialog.form.target_port = eventNumber($event)"
+          />
         </label>
       </div>
       <template #footer>

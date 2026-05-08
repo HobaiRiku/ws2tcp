@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '@/api/client'
 import type { Endpoint } from '@/api/types'
-import { eventChecked } from '@/utils/forms'
+import { eventChecked, eventNumber, eventValue } from '@/utils/forms'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
@@ -231,31 +231,48 @@ useAutoRefresh(load, 5000)
       <div class="form-grid two-up">
         <label>
           <span class="field-label">{{ t('endpoints.fieldName') }}</span>
-          <input v-model="form.name" class="text-input" :disabled="!!editingName" />
+          <fluent-text-field
+            :value="form.name"
+            :disabled="!!editingName"
+            @input="form.name = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('endpoints.fieldHost') }}</span>
-          <input v-model="form.host" class="text-input" />
+          <fluent-text-field
+            :value="form.host"
+            @input="form.host = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('endpoints.fieldIP') }}</span>
-          <input v-model="form.ip" class="text-input" />
+          <fluent-text-field
+            :value="form.ip"
+            @input="form.ip = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('endpoints.fieldPort') }}</span>
-          <input v-model.number="form.port" class="text-input" type="number" />
+          <fluent-text-field
+            type="number"
+            :value="String(form.port || '')"
+            @input="form.port = eventNumber($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('endpoints.fieldPath') }}</span>
-          <input v-model="form.path" class="text-input" />
+          <fluent-text-field
+            :value="form.path"
+            @input="form.path = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('endpoints.fieldAesKey') }}</span>
-          <input
-            v-model="form.aes_key"
-            class="text-input mono"
-            type="text"
+          <fluent-text-field
+            class="mono"
+            :value="form.aes_key"
             :placeholder="t('endpoints.aesKeyPlaceholderNew')"
+            @input="form.aes_key = eventValue($event)"
           />
         </label>
       </div>

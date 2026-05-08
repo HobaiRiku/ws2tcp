@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '@/api/client'
 import type { ACLRule, ServerClient, ServerSettings } from '@/api/types'
 import { useRuntimeStore } from '@/stores/runtime'
-import { eventChecked } from '@/utils/forms'
+import { eventChecked, eventValue } from '@/utils/forms'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useAutoRefresh } from '@/composables/useAutoRefresh'
@@ -394,19 +394,26 @@ useAutoRefresh(load, 5000)
       <div class="form-grid two-up">
         <label>
           <span class="field-label">{{ t('server.fieldClientId') }}</span>
-          <input v-model="clientDialog.form.id" class="text-input" :disabled="!!clientDialog.editing" />
+          <fluent-text-field
+            :value="clientDialog.form.id"
+            :disabled="!!clientDialog.editing"
+            @input="clientDialog.form.id = eventValue($event)"
+          />
         </label>
         <label>
           <span class="field-label">{{ t('server.fieldSecret') }}</span>
-          <input v-model="clientDialog.form.secret" class="text-input" type="text" />
+          <fluent-text-field
+            :value="clientDialog.form.secret"
+            @input="clientDialog.form.secret = eventValue($event)"
+          />
         </label>
         <label class="form-span-full">
           <span class="field-label">{{ t('server.fieldAcl') }}</span>
-          <textarea
-            v-model="clientDialog.form.aclText"
-            class="text-area"
+          <fluent-text-area
             rows="5"
+            :value="clientDialog.form.aclText"
             :placeholder="t('server.aclPlaceholder')"
+            @input="clientDialog.form.aclText = eventValue($event)"
           />
         </label>
       </div>
@@ -440,20 +447,34 @@ useAutoRefresh(load, 5000)
         <div class="form-grid two-up">
           <label>
             <span class="field-label">{{ t('server.fieldListen') }}</span>
-            <input v-model="settingsDialog.form.listen" class="text-input" :placeholder="t('server.listenHelp')" />
+            <fluent-text-field
+              :value="settingsDialog.form.listen"
+              :placeholder="t('server.listenHelp')"
+              @input="settingsDialog.form.listen = eventValue($event)"
+            />
           </label>
           <label>
             <span class="field-label">{{ t('server.fieldWsPath') }}</span>
-            <input v-model="settingsDialog.form.ws_path" class="text-input" />
+            <fluent-text-field
+              :value="settingsDialog.form.ws_path"
+              @input="settingsDialog.form.ws_path = eventValue($event)"
+            />
           </label>
           <label>
             <span class="field-label">{{ t('server.fieldWsHost') }}</span>
-            <input v-model="settingsDialog.form.ws_host" class="text-input" />
+            <fluent-text-field
+              :value="settingsDialog.form.ws_host"
+              @input="settingsDialog.form.ws_host = eventValue($event)"
+            />
           </label>
           <label class="form-span-full">
             <span class="field-label">{{ t('server.fieldAesKey') }}</span>
             <div class="inline-group">
-              <input v-model="settingsDialog.form.aes_key" class="text-input mono" type="text" />
+              <fluent-text-field
+                class="mono"
+                :value="settingsDialog.form.aes_key"
+                @input="settingsDialog.form.aes_key = eventValue($event)"
+              />
               <IconBtn
                 icon="generate"
                 size="sm"
@@ -464,11 +485,17 @@ useAutoRefresh(load, 5000)
           </label>
           <label>
             <span class="field-label">{{ t('server.fieldTlsCert') }}</span>
-            <input v-model="settingsDialog.form.tls_cert" class="text-input" />
+            <fluent-text-field
+              :value="settingsDialog.form.tls_cert"
+              @input="settingsDialog.form.tls_cert = eventValue($event)"
+            />
           </label>
           <label>
             <span class="field-label">{{ t('server.fieldTlsKey') }}</span>
-            <input v-model="settingsDialog.form.tls_key" class="text-input" />
+            <fluent-text-field
+              :value="settingsDialog.form.tls_key"
+              @input="settingsDialog.form.tls_key = eventValue($event)"
+            />
           </label>
         </div>
 

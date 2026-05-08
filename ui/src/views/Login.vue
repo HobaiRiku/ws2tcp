@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVersionStore } from '@/stores/version'
 import { useI18n } from 'vue-i18n'
+import { eventValue } from '@/utils/forms'
 
 const { t } = useI18n()
 const token = ref('')
@@ -38,12 +39,12 @@ async function submit() {
       <p class="hint">{{ t('login.hint') }}</p>
       <div v-if="error" class="banner error">{{ error }}</div>
       <label class="field-label" for="token">{{ t('login.tokenLabel') }}</label>
-      <input
+      <fluent-text-field
         id="token"
-        v-model="token"
-        class="text-input"
         type="password"
+        :value="token"
         :placeholder="t('login.tokenPlaceholder')"
+        @input="token = eventValue($event)"
         @keydown.enter="submit"
       />
       <fluent-button appearance="accent" :disabled="busy || !token" @click="submit">

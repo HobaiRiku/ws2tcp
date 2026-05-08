@@ -330,9 +330,12 @@ a {
   margin-bottom: 0.4rem;
 }
 
-.text-input,
-.select-input,
-.text-area {
+/* 原生 input/select/textarea 上的 fluent 风格补丁: 大小 + 边框 + hover/focus.
+ * 显式只匹配原生标签 (input.text-input 等), 避免误伤同类名的 fluent-* 自定义元素 —
+ * 后者有自己的 focus visual, 套上 box-shadow 环会双层. */
+input.text-input,
+select.select-input,
+textarea.text-area {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -342,30 +345,28 @@ a {
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
-/* fluent 风格的 hover / focus: 边框跟 accent 走, focus 时多一道半透明环.
- * 同时盖到原生 input/select/textarea 和我们自己的 .text-input 类. */
-.text-input:hover,
-.select-input:hover,
-.text-area:hover {
+input.text-input:hover,
+select.select-input:hover,
+textarea.text-area:hover {
   border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
 }
 
-.text-input:focus,
-.select-input:focus,
-.text-area:focus {
+input.text-input:focus,
+select.select-input:focus,
+textarea.text-area:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
 }
 
-.text-input:disabled,
-.select-input:disabled,
-.text-area:disabled {
+input.text-input:disabled,
+select.select-input:disabled,
+textarea.text-area:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
 
-.text-area {
+textarea.text-area {
   resize: vertical;
 }
 
@@ -729,6 +730,13 @@ a {
   border-radius: 999px;
   font-size: 0.85rem;
   padding: 0 0.7rem;
+}
+
+/* fluent-text-field / fluent-text-area 的 mono class 让内部 control 走等宽字体,
+ * 跟原 input.mono 的视觉一致. */
+fluent-text-field.mono::part(control),
+fluent-text-area.mono::part(control) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 .col-actions {
