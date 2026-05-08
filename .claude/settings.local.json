@@ -6,7 +6,8 @@
       "Bash(go test *)",
       "Bash(make build *)",
       "Bash(./build/bin/ws2tcp version *)",
-      "Bash(./build/bin/ws2tcp -v)"
+      "Bash(./build/bin/ws2tcp -v)",
+      "Bash(make ui-build *)"
     ]
   }
 }

@@ -109,8 +109,6 @@ ui-dev:
 	cd $(UI_DIR) && $(PNPM) run dev
 
 ui-build: ui-install
-	# vite 配置里 emptyOutDir=false; 这里手动清理上次产物.
-	rm -rf $(EMBED_DIR)/assets $(EMBED_DIR)/index.html
 	cd $(UI_DIR) && $(PNPM) run build
 
 ui-lint:
@@ -153,7 +151,7 @@ web-clean: ui-clean
 # 全部用 CGO_ENABLED=0 + -trimpath, 输出静态二进制, 不依赖 host 的 libc 版本.
 # Web UI 走一次 ui-build, 多个目标共享同一份 internal/web/static/, 省时间.
 
-dist: ui-build
+dist: dist-clean ui-build
 	@mkdir -p $(DIST_DIR)
 	@rm -f $(DIST_DIR)/SHA256SUMS
 	@for target in $(DIST_TARGETS); do \

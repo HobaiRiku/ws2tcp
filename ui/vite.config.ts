@@ -45,7 +45,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       outDir: '../internal/web/static',
-      emptyOutDir: false,
+      emptyOutDir: true,
       sourcemap: false,
       target: 'es2022'
     }
