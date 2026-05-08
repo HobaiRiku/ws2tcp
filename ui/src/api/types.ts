@@ -35,6 +35,7 @@ export type ServerStats = {
 }
 
 export type ServerSettings = {
+  enabled: boolean
   listen: string
   ws_path: string
   ws_host: string

@@ -86,6 +86,7 @@ type serverStatsResponse struct {
 }
 
 type serverSettingsResponse struct {
+	Enabled       bool   `json:"enabled"`
 	Listen        string `json:"listen"`
 	WSPath        string `json:"ws_path"`
 	WSHost        string `json:"ws_host"`
@@ -98,6 +99,7 @@ type serverSettingsResponse struct {
 }
 
 type serverSettingsPatchRequest struct {
+	Enabled       *bool   `json:"enabled"`
 	Listen        *string `json:"listen"`
 	WSPath        *string `json:"ws_path"`
 	WSHost        *string `json:"ws_host"`
@@ -411,6 +413,10 @@ func NewRouter(opts Options) *gin.Engine {
 		}
 		var ops []updateOp
 		transportDirty := false
+		if req.Enabled != nil {
+			ops = append(ops, updateOp{"server.enabled", strconv.FormatBool(*req.Enabled)})
+			transportDirty = true
+		}
 		if req.Listen != nil {
 			ops = append(ops, updateOp{"server.listen", *req.Listen})
 			transportDirty = true
@@ -641,6 +647,7 @@ func redactIdentities(identities []services.Identity) []gin.H {
 
 func serverSettings(cfg config.ServerConfig) serverSettingsResponse {
 	return serverSettingsResponse{
+		Enabled:       cfg.Enabled,
 		Listen:        cfg.Listen,
 		WSPath:        cfg.WSPath,
 		WSHost:        cfg.WSHost,

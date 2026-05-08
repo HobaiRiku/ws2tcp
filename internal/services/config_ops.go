@@ -51,7 +51,16 @@ func (r *Registry) SetConfigValue(path string, raw string) error {
 				var ok bool
 				value, _, ok = mappingValue(node, part)
 				if !ok {
-					return fmt.Errorf("config path %q not found", path)
+					// 仅在最后一段允许 upsert: 给老 config 升级时新增的字段
+					// (如 server.enabled) 提供平滑路径, 同时保留中间路径必须
+					// 存在的约束以防止 typo 创建出整棵未知子树.
+					if i != len(parts)-1 {
+						return fmt.Errorf("config path %q not found", path)
+					}
+					keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: part}
+					valNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: inferScalarTag(raw), Value: ""}
+					node.Content = append(node.Content, keyNode, valNode)
+					value = valNode
 				}
 			case yaml.SequenceNode:
 				idx, err := strconv.Atoi(part)
@@ -81,6 +90,20 @@ func (r *Registry) SetConfigValue(path string, raw string) error {
 		}
 		return nil
 	})
+}
+
+// inferScalarTag 给 upsert 出来的新 scalar 选一个合适的 YAML tag,
+// 让 parseScalarValue 走到对应的分支 (bool/int/str). 启发式而非严格,
+// 没识别出来就当字符串 — PATCH 来源是受信任的管理 API, 不会搞坏什么.
+func inferScalarTag(raw string) string {
+	switch strings.ToLower(raw) {
+	case "true", "false":
+		return "!!bool"
+	}
+	if _, err := strconv.Atoi(raw); err == nil {
+		return "!!int"
+	}
+	return "!!str"
 }
 
 func parseScalarValue(existing *yaml.Node, raw string) (string, string, error) {

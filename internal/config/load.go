@@ -55,6 +55,7 @@ func (c *Config) applyTrueDefaults() {
 	c.App.HTTPAuth = true
 	c.App.LogLevel = "info"
 	c.Server.UseEncryption = true
+	c.Server.Enabled = true
 }
 
 // applyZeroDefaults fills string/numeric fields whose default isn't the

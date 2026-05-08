@@ -203,6 +203,7 @@ func buildConfig(opts harnessOpts) *config.Config {
 			LogLevel:   "info",
 		},
 		Server: config.ServerConfig{
+			Enabled:       true,
 			Listen:        fmt.Sprintf("127.0.0.1:%d", opts.serverPort),
 			WSPath:        "/connect",
 			AESKey:        e2eAESKey,

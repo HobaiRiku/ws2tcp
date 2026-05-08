@@ -43,7 +43,9 @@ func (c *Config) validateApp() []string {
 }
 
 func (c *Config) validateServer() []string {
-	if !c.ServerConfigured() {
+	// 关掉的 server 不校验 — 用户可能字段先空着, 等开启时再补.
+	// 同样 PATCH 把 enabled 翻成 true 时会再次走 Apply 校验.
+	if !c.ShouldRunServer() {
 		return nil
 	}
 	var errs []string

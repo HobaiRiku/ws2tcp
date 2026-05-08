@@ -23,6 +23,13 @@ func (c *Config) ServerConfigured() bool {
 		c.Server.TLS.Enabled
 }
 
+// ShouldRunServer 综合显式开关 (server.enabled) 和"是否填了关键字段"
+// 两个条件: 用户主动关掉则一定不跑, 即便填了 listen / aes_key.
+// 这是给"只想做客户端" 的部署用的安全开关.
+func (c *Config) ShouldRunServer() bool {
+	return c.Server.Enabled && c.ServerConfigured()
+}
+
 // ClientConfigured reports whether the client section has any configured
 // endpoints or profiles and therefore should be validated/run.
 func (c *Config) ClientConfigured() bool {
@@ -40,6 +47,10 @@ type AppConfig struct {
 
 // ServerConfig is the ws2tcp-server role (terminate WS, dial target TCP).
 type ServerConfig struct {
+	// Enabled 是显式启停开关. 默认 true (在 applyTrueDefaults 里设置, YAML
+	// 缺字段时也会被回填), 设为 false 时即使 listen / aes_key 全填齐也不会
+	// 起 server, 适合"只跑客户端"的安全部署.
+	Enabled       bool             `yaml:"enabled" json:"enabled"`
 	Listen        string           `yaml:"listen" json:"listen"`
 	WSPath        string           `yaml:"ws_path" json:"ws_path"`
 	WSHost        string           `yaml:"ws_host" json:"ws_host"`

@@ -195,8 +195,9 @@ func (s *serverSupervisor) Run(ctx context.Context) error {
 			s.opts.Logger.Error("supervisor: load config", "err", err)
 			cfg = s.opts.Config
 		}
-		if !cfg.ServerConfigured() {
-			// nothing to run yet — wait for either a restart signal or shutdown.
+		if !cfg.ShouldRunServer() {
+			// 没填齐字段, 或者 server.enabled=false (用户显式关掉).
+			// 都等待 restart / 关停信号, 不起 server.
 			select {
 			case <-ctx.Done():
 				return nil

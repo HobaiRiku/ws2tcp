@@ -171,10 +171,11 @@ async function saveSettings() {
       if ((transportFields as readonly string[]).includes(k)) restart = true
     }
   })
-  ;(['trust_proxy', 'use_encryption', 'tls_enabled'] as const).forEach(k => {
+  ;(['enabled', 'trust_proxy', 'use_encryption', 'tls_enabled'] as const).forEach(k => {
     if (f[k] !== orig[k]) {
       payload[k] = f[k]
-      if ((transportFields as readonly string[]).includes(k)) restart = true
+      // enabled 也会决定 server 是否在跑, 走 transport 重启路径.
+      if (k === 'enabled' || (transportFields as readonly string[]).includes(k)) restart = true
     }
   })
   if (!Object.keys(payload).length) {
@@ -265,6 +266,14 @@ useAutoRefresh(load, 5000)
 
     <section v-if="settings" class="settings-summary-card">
       <div class="summary-grid">
+        <div class="summary-cell">
+          <span class="summary-label">{{ t('server.summaryEnabled') }}</span>
+          <strong>
+            <span class="badge" :class="settings.enabled ? 'badge-ok' : 'badge-warn'">
+              {{ settings.enabled ? t('common.enabled') : t('common.disabled') }}
+            </span>
+          </strong>
+        </div>
         <div class="summary-cell">
           <span class="summary-label">{{ t('server.summaryListen') }}</span>
           <strong class="mono">{{ settings.listen || '—' }}</strong>
@@ -400,6 +409,15 @@ useAutoRefresh(load, 5000)
     >
       <template v-if="settingsDialog.form">
         <p class="muted small">{{ t('server.transportRestartHint') }}</p>
+        <div class="checkbox-row fluent-switches">
+          <fluent-switch
+            :checked="settingsDialog.form.enabled"
+            @change="settingsDialog.form.enabled = eventChecked($event)"
+          >
+            {{ t('server.fieldEnabled') }}
+          </fluent-switch>
+          <span class="muted small">{{ t('server.fieldEnabledHint') }}</span>
+        </div>
         <div class="form-grid two-up">
           <label>
             <span class="field-label">{{ t('server.fieldListen') }}</span>
