@@ -45,8 +45,11 @@ func Root() *cobra.Command {
 		startCmd(),
 		stopCmd(),
 		statusCmd(),
-		clientCmd(),
 		serverCmd(),
+		serverClientCmd(),
+		endpointCmd(),
+		clientCmd(),
+		tunnelCmd(),
 		configCmd(),
 		versionCmd(),
 	)

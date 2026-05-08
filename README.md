@@ -131,8 +131,11 @@ ws2tcp uninstall    # 注销
 ws2tcp start/stop   # 通过 OS 服务管理器启停
 ws2tcp status       # 当前服务状态
 
-ws2tcp client …     # CLI: endpoints / profiles / tunnels CRUD
-ws2tcp server …     # CLI: server clients / settings CRUD
+ws2tcp server …         # server show|enable|disable|update
+ws2tcp server-client …  # server-side client identity CRUD
+ws2tcp endpoint …       # reusable endpoint CRUD
+ws2tcp client …         # client profile CRUD
+ws2tcp tunnel …         # tunnel CRUD / global listing
 ws2tcp config …     # 查看 / 校验 / 导出配置
 ws2tcp version      # 版本 + 构建信息
 ```

@@ -2,204 +2,166 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
 	"websocket2Tcp/internal/config"
-	"websocket2Tcp/internal/services"
 )
 
 func serverCmd() *cobra.Command {
 	server := &cobra.Command{
 		Use:   "server",
-		Short: "Manage server-side clients and ACLs",
+		Short: "Manage server settings",
 	}
 	server.AddCommand(
-		serverClientsCmd(),
-		serverACLCmd(),
+		serverShowCmd(),
+		serverEnableCmd(),
+		serverDisableCmd(),
+		serverUpdateCmd(),
 	)
 	return server
 }
 
-func serverClientsCmd() *cobra.Command {
-	clients := &cobra.Command{
-		Use:   "clients",
-		Short: "Manage server-side client identities",
+func serverShowCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "show",
+		Short: "Show the server configuration",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			return printYAML(cmd, cfg.Server)
+		},
 	}
-	clients.AddCommand(
-		serverClientsListCmd(),
-		serverClientsAddCmd(),
-		serverClientsUpdateCmd(),
-		serverClientsRmCmd(),
-	)
-	return clients
 }
 
-func serverClientsListCmd() *cobra.Command {
+func serverEnableCmd() *cobra.Command {
+	return serverEnabledCmd(true)
+}
+
+func serverDisableCmd() *cobra.Command {
+	return serverEnabledCmd(false)
+}
+
+func serverEnabledCmd(enabled bool) *cobra.Command {
+	use := "disable"
+	msg := "server disabled"
+	raw := "false"
+	if enabled {
+		use = "enable"
+		msg = "server enabled"
+		raw = "true"
+	}
 	return &cobra.Command{
-		Use:   "list",
-		Short: "List configured server-side clients",
+		Use:   use,
+		Short: msg[:1] + msg[1:],
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			reg, err := loadRegistry()
 			if err != nil {
 				return err
 			}
-			tw := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 2, 2, ' ', 0)
-			_, _ = fmt.Fprintln(tw, "ID\tACL_RULES")
-			for _, client := range reg.Identities() {
-				_, _ = fmt.Fprintf(tw, "%s\t%d\n", client.ID, len(client.ACL))
+			if err := reg.SetConfigValue("server.enabled", raw); err != nil {
+				return fmt.Errorf("set server.enabled: %w", err)
 			}
-			return tw.Flush()
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), msg)
+			return nil
 		},
 	}
 }
 
-func serverClientsAddCmd() *cobra.Command {
+func serverUpdateCmd() *cobra.Command {
 	var (
-		id     string
-		secret string
-		acl    []string
+		listen        string
+		wsPath        string
+		wsHost        string
+		trustProxy    bool
+		aesKey        string
+		useEncryption bool
+		tlsEnabled    bool
+		tlsCert       string
+		tlsKey        string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "add",
-		Short: "Add a server-side client identity",
+		Use:   "update",
+		Short: "Update server settings",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rules, err := parseACLSpecs(acl)
+			if err := requireChangedFlags(cmd,
+				"listen",
+				"ws-path",
+				"ws-host",
+				"trust-proxy",
+				"aes-key",
+				"use-encryption",
+				"tls-enabled",
+				"tls-cert",
+				"tls-key",
+			); err != nil {
+				return err
+			}
+
+			cfg, reg, err := loadConfigAndRegistry()
 			if err != nil {
 				return err
 			}
-			reg, err := loadRegistry()
-			if err != nil {
-				return err
+
+			patch := cfg.Server
+			if cmd.Flags().Changed("listen") {
+				patch.Listen = listen
 			}
-			if err := reg.CreateClient(config.ClientIdentity{
-				ID:     id,
-				Secret: secret,
-				ACL:    rules,
-			}); err != nil {
-				return fmt.Errorf("add server client: %w", err)
+			if cmd.Flags().Changed("ws-path") {
+				patch.WSPath = wsPath
 			}
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "server client added")
+			if cmd.Flags().Changed("ws-host") {
+				patch.WSHost = wsHost
+			}
+			if cmd.Flags().Changed("trust-proxy") {
+				patch.TrustProxy = trustProxy
+			}
+			if cmd.Flags().Changed("aes-key") {
+				patch.AESKey = aesKey
+			}
+			if cmd.Flags().Changed("use-encryption") {
+				patch.UseEncryption = useEncryption
+			}
+			if cmd.Flags().Changed("tls-enabled") {
+				patch.TLS.Enabled = tlsEnabled
+			}
+			if cmd.Flags().Changed("tls-cert") {
+				patch.TLS.Cert = tlsCert
+			}
+			if cmd.Flags().Changed("tls-key") {
+				patch.TLS.Key = tlsKey
+			}
+
+			next := *cfg
+			next.Server = patch
+			if err := reg.ReplaceConfig(&next); err != nil {
+				return fmt.Errorf("update server: %w", err)
+			}
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "server updated")
 			return nil
 		},
 	}
 
-	cmd.Flags().StringVar(&id, "id", "", "client id")
-	cmd.Flags().StringVar(&secret, "secret", "", "client secret")
-	cmd.Flags().StringArrayVar(&acl, "acl", nil, "ACL rule in cidr:port[,port...] form")
-	_ = cmd.MarkFlagRequired("id")
-	_ = cmd.MarkFlagRequired("secret")
+	cmd.Flags().StringVar(&listen, "listen", "", "server listen address")
+	cmd.Flags().StringVar(&wsPath, "ws-path", "", "websocket path")
+	cmd.Flags().StringVar(&wsHost, "ws-host", "", "required Host header for websocket requests")
+	cmd.Flags().BoolVar(&trustProxy, "trust-proxy", false, "trust reverse proxy headers")
+	cmd.Flags().StringVar(&aesKey, "aes-key", "", "32-byte handshake AES key")
+	cmd.Flags().BoolVar(&useEncryption, "use-encryption", false, "enable end-to-end data encryption")
+	cmd.Flags().BoolVar(&tlsEnabled, "tls-enabled", false, "enable native TLS on the server listener")
+	cmd.Flags().StringVar(&tlsCert, "tls-cert", "", "TLS certificate path relative to WS2TCP_HOME")
+	cmd.Flags().StringVar(&tlsKey, "tls-key", "", "TLS key path relative to WS2TCP_HOME")
 	return cmd
 }
 
-func serverClientsUpdateCmd() *cobra.Command {
-	var (
-		secret string
-		acl    []string
-	)
-
-	cmd := &cobra.Command{
-		Use:   "update <id>",
-		Short: "Update a server-side client identity",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var patch services.ClientPatch
-			if cmd.Flags().Changed("secret") {
-				patch.Secret = &secret
-			}
-			if cmd.Flags().Changed("acl") {
-				rules, err := parseACLSpecs(acl)
-				if err != nil {
-					return err
-				}
-				patch.ACL = &rules
-			}
-			if patch.Secret == nil && patch.ACL == nil {
-				return fmt.Errorf("no client fields provided")
-			}
-
-			reg, err := loadRegistry()
-			if err != nil {
-				return err
-			}
-			if err := reg.UpdateClient(args[0], patch); err != nil {
-				return fmt.Errorf("update server client: %w", err)
-			}
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "server client updated")
-			return nil
-		},
-	}
-
-	cmd.Flags().StringVar(&secret, "secret", "", "new client secret")
-	cmd.Flags().StringArrayVar(&acl, "acl", nil, "replacement ACL rules in cidr:port[,port...] form")
-	return cmd
-}
-
-func serverClientsRmCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "rm <id>",
-		Short: "Remove a server-side client identity",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			reg, err := loadRegistry()
-			if err != nil {
-				return err
-			}
-			if err := reg.DeleteClient(args[0]); err != nil {
-				return fmt.Errorf("remove server client: %w", err)
-			}
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "server client removed")
-			return nil
-		},
-	}
-}
-
-func serverACLCmd() *cobra.Command {
-	acl := &cobra.Command{
-		Use:   "acl",
-		Short: "Manage server-side ACLs",
-	}
-	acl.AddCommand(&cobra.Command{
-		Use:   "set <id> <rule> [rule...]",
-		Short: "Replace a client's ACL with compact cidr:port[,port...] rules",
-		Args:  cobra.MinimumNArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			rules, err := parseACLSpecs(args[1:])
-			if err != nil {
-				return err
-			}
-			reg, err := loadRegistry()
-			if err != nil {
-				return err
-			}
-			if err := reg.SetClientACL(args[0], rules); err != nil {
-				return fmt.Errorf("set client acl: %w", err)
-			}
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "client acl updated")
-			return nil
-		},
-	})
-	return acl
-}
-
-func parseACLSpecs(specs []string) ([]config.ACLRule, error) {
-	out := make([]config.ACLRule, 0, len(specs))
-	for _, spec := range specs {
-		parts := strings.SplitN(spec, ":", 2)
-		if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-			return nil, fmt.Errorf("invalid acl rule %q", spec)
+func findServerClient(cfg *config.Config, id string) (config.ClientIdentity, error) {
+	for _, client := range cfg.Server.Clients {
+		if client.ID == id {
+			return client, nil
 		}
-		ports := strings.Split(parts[1], ",")
-		for i := range ports {
-			ports[i] = strings.TrimSpace(ports[i])
-		}
-		out = append(out, config.ACLRule{
-			CIDR:  strings.TrimSpace(parts[0]),
-			Ports: ports,
-		})
 	}
-	return out, nil
+	return config.ClientIdentity{}, fmt.Errorf("client %q not found", id)
 }
