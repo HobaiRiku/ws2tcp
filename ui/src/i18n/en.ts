@@ -193,6 +193,15 @@ export default {
     summaryShowKey: 'show',
     summaryHideKey: 'hide'
   },
+  backendDown: {
+    title: 'Backend unavailable',
+    hint: 'The ws2tcp management API is not responding. The console is offline until it recovers.',
+    reasonStopped: 'Backend process not started or has crashed (check ws2tcp run / service status)',
+    reasonPort: 'Listen port is taken or blocked by a firewall',
+    reasonNetwork: 'Reverse proxy or network path is broken (502, cable unplugged, etc.)',
+    retry: 'Retry now',
+    autoRetry: 'Retrying every 2 seconds…'
+  },
   logs: {
     subtitle: 'History comes from the in-memory ring buffer; new lines stream in live',
     tailing: 'Tailing',

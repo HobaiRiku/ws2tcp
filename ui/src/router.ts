@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useHealthStore } from '@/stores/health'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -7,6 +8,12 @@ const routes: RouteRecordRaw[] = [
     name: 'login',
     component: () => import('@/views/Login.vue'),
     meta: { public: true }
+  },
+  {
+    path: '/backend-down',
+    name: 'backend-down',
+    component: () => import('@/views/BackendDown.vue'),
+    meta: { public: true, skipHealth: true }
   },
   {
     path: '/',
@@ -28,6 +35,14 @@ const router = createRouter({
 })
 
 router.beforeEach(async to => {
+  // backend-down 自身要能进, 否则进不去探活页面就死循环.
+  if (!to.meta.skipHealth) {
+    const health = useHealthStore()
+    const status = await health.ensure()
+    if (status === 'down') {
+      return { name: 'backend-down', query: { redirect: to.fullPath } }
+    }
+  }
   if (to.meta.public) return true
   const auth = useAuthStore()
   if (!auth.ready) await auth.refresh()

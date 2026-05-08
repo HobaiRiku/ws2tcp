@@ -10,6 +10,16 @@ export type ApiError = {
 
 export type ApiResult<T> = readonly [ApiError, null] | readonly [null, T]
 
+// 网络错误监听: health store 在 main.ts 注册一个 listener,
+// 业务调用碰到 NETWORK_ERROR 时同步告诉 health store, 用户下一次
+// 切路由就会被守卫拦到 /backend-down. 不强耦合 — 没注册也能跑.
+type NetworkErrorListener = () => void
+let networkErrorListener: NetworkErrorListener | null = null
+
+export function onNetworkError(fn: NetworkErrorListener) {
+  networkErrorListener = fn
+}
+
 export const tokenStore = {
   get(): string {
     return localStorage.getItem(TOKEN_KEY) ?? ''
@@ -65,6 +75,7 @@ export async function request<T = unknown>(
       signal: opts.signal
     })
   } catch (e) {
+    networkErrorListener?.()
     return [{ status: 0, code: 'NETWORK_ERROR', message: (e as Error).message }, null] as const
   }
 

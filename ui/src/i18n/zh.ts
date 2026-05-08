@@ -193,6 +193,15 @@ export default {
     summaryShowKey: '显示',
     summaryHideKey: '隐藏'
   },
+  backendDown: {
+    title: '后端服务不可用',
+    hint: 'ws2tcp 管理 API 没响应, 控制台暂时无法工作.',
+    reasonStopped: '后端进程未启动或已退出 (检查 ws2tcp run / 系统服务状态)',
+    reasonPort: '监听端口被占用或被防火墙拦截',
+    reasonNetwork: '反向代理 / 网络链路异常 (502, 网线断开等)',
+    retry: '立即重试',
+    autoRetry: '已每 2 秒自动重试…'
+  },
   logs: {
     subtitle: '历史从内存环形缓冲读取, 新日志通过事件流实时推送',
     tailing: '自动滚动',
