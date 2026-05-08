@@ -9,6 +9,7 @@ import { useAutoRefresh } from '@/composables/useAutoRefresh'
 import Modal from '@/components/Modal.vue'
 import IconBtn from '@/components/IconBtn.vue'
 import LogViewer from '@/components/LogViewer.vue'
+import { eventValue } from '@/utils/forms'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -357,12 +358,15 @@ useAutoRefresh(load, 5000)
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldEndpoint') }}</span>
-          <select v-model="profileDialog.form.endpoint" class="select-input">
-            <option disabled value="">{{ t('clients.selectEndpoint') }}</option>
-            <option v-for="endpoint in endpoints" :key="endpoint.name" :value="endpoint.name">
+          <fluent-select
+            class="select-input"
+            :value="profileDialog.form.endpoint"
+            @change="profileDialog.form.endpoint = eventValue($event)"
+          >
+            <fluent-option v-for="endpoint in endpoints" :key="endpoint.name" :value="endpoint.name">
               {{ endpoint.name }}
-            </option>
-          </select>
+            </fluent-option>
+          </fluent-select>
         </label>
         <label>
           <span class="field-label">{{ t('clients.fieldClientId') }}</span>

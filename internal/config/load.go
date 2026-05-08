@@ -55,6 +55,9 @@ func (c *Config) applyTrueDefaults() {
 	c.App.HTTPAuth = true
 	c.App.LogLevel = "info"
 	c.Server.UseEncryption = true
+	// 老 config 缺 server.enabled 字段时回填 true, 保持升级前行为不变.
+	// 新装的 config (example.go) 显式写 enabled: false, "只跑客户端"
+	// 是新安装的安全缺省 — YAML 显式值会盖掉这里的 true.
 	c.Server.Enabled = true
 }
 

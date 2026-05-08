@@ -37,8 +37,10 @@ async function logout() {
 }
 
 function switchLocale(event: Event) {
-  const target = event.target as HTMLSelectElement
-  setLocale(target.value as LocaleKey)
+  // fluent-select 把当前值放在 event.target.value 上, 与原生 select 一致.
+  const value = (event.target as { value?: string }).value
+  if (!value) return
+  setLocale(value as LocaleKey)
 }
 </script>
 
@@ -55,9 +57,11 @@ function switchLocale(event: Event) {
         <span class="badge nowrap" :class="runtime.connected ? 'badge-ok' : 'badge-warn'">
           {{ runtime.connected ? t('shell.streamConnected') : t('shell.streamReconnecting') }}
         </span>
-        <select class="locale-select" :value="currentLocale()" @change="switchLocale">
-          <option v-for="opt in localeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-        </select>
+        <fluent-select class="locale-select" :value="currentLocale()" @change="switchLocale">
+          <fluent-option v-for="opt in localeOptions" :key="opt.value" :value="opt.value">
+            {{ opt.label }}
+          </fluent-option>
+        </fluent-select>
         <IconBtn icon="logout" :title="t('shell.signOut')" @click="logout" />
       </div>
     </header>

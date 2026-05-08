@@ -339,6 +339,30 @@ a {
   background: var(--surface);
   color: var(--text);
   padding: 0.75rem 0.85rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+/* fluent 风格的 hover / focus: 边框跟 accent 走, focus 时多一道半透明环.
+ * 同时盖到原生 input/select/textarea 和我们自己的 .text-input 类. */
+.text-input:hover,
+.select-input:hover,
+.text-area:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.text-input:focus,
+.select-input:focus,
+.text-area:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.text-input:disabled,
+.select-input:disabled,
+.text-area:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .text-area {
@@ -692,15 +716,19 @@ a {
   color: var(--danger);
 }
 
+/* AppShell 顶栏 fluent-select 比较"胖", 这里收紧到 32px 高度对齐其它图标按钮. */
 .locale-select {
+  min-width: 86px;
+  --neutral-fill-input-rest: var(--surface);
+  --neutral-fill-input-hover: var(--surface);
+  --neutral-fill-input-active: var(--surface);
+}
+.locale-select::part(control) {
   height: 32px;
-  border: 1px solid var(--border);
+  min-height: 32px;
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--text);
-  padding: 0 0.7rem;
   font-size: 0.85rem;
-  cursor: pointer;
+  padding: 0 0.7rem;
 }
 
 .col-actions {

@@ -45,7 +45,7 @@ func Example() *Config {
 			LogLevel:   "info",
 		},
 		Server: ServerConfig{
-			Enabled:       true,
+			Enabled:       false,
 			Listen:        serverListen,
 			WSPath:        wsPath,
 			TrustProxy:    false,

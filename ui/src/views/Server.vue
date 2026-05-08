@@ -150,6 +150,18 @@ function openSettings() {
   settingsDialog.value = { open: true, form: { ...settings.value } }
 }
 
+// 顶栏快捷开关: 只 PATCH enabled 一项, 立刻落地并触发后端 supervisor 重启.
+// 表单里的开关仍然保留, 只是这里多一个一目了然的入口.
+async function toggleServerEnabled(next: boolean) {
+  if (!settings.value || settings.value.enabled === next) return
+  busy.value = true
+  const [err] = await api.patch('/api/server/settings', { enabled: next })
+  busy.value = false
+  if (err) return toast.error(err.message)
+  toast.success(next ? t('server.starting') : t('server.stopping'))
+  await load()
+}
+
 async function saveSettings() {
   const f = settingsDialog.value.form
   if (!f) return
@@ -243,7 +255,22 @@ useAutoRefresh(load, 5000)
 <template>
   <section class="page">
     <div class="page-toolbar">
-      <h1 class="page-title">{{ t('server.title') }}</h1>
+      <div class="title-group">
+        <h1 class="page-title">{{ t('server.title') }}</h1>
+        <div
+          v-if="settings"
+          class="server-enabled-toggle"
+          :class="settings.enabled ? 'is-on' : 'is-off'"
+        >
+          <fluent-switch
+            :checked="settings.enabled"
+            :disabled="busy"
+            @change="toggleServerEnabled(eventChecked($event))"
+          >
+            {{ settings.enabled ? t('server.enabledOn') : t('server.enabledOff') }}
+          </fluent-switch>
+        </div>
+      </div>
       <div class="toolbar-actions">
         <span class="badge badge-info nowrap">{{ t('server.activeConnections', { count: totalConnections }) }}</span>
         <IconBtn
@@ -266,14 +293,6 @@ useAutoRefresh(load, 5000)
 
     <section v-if="settings" class="settings-summary-card">
       <div class="summary-grid">
-        <div class="summary-cell">
-          <span class="summary-label">{{ t('server.summaryEnabled') }}</span>
-          <strong>
-            <span class="badge" :class="settings.enabled ? 'badge-ok' : 'badge-warn'">
-              {{ settings.enabled ? t('common.enabled') : t('common.disabled') }}
-            </span>
-          </strong>
-        </div>
         <div class="summary-cell">
           <span class="summary-label">{{ t('server.summaryListen') }}</span>
           <strong class="mono">{{ settings.listen || '—' }}</strong>
@@ -492,3 +511,32 @@ useAutoRefresh(load, 5000)
     />
   </section>
 </template>
+
+<style scoped>
+.title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.server-enabled-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.server-enabled-toggle.is-on {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+  color: var(--ok);
+}
+.server-enabled-toggle.is-off {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warn) 35%, transparent);
+  color: var(--warn);
+}
+</style>
