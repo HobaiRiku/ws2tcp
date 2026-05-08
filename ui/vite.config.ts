@@ -40,7 +40,8 @@ export default defineConfig(({ mode }) => {
       }),
       VitePWA({
         registerType: 'autoUpdate',
-        injectRegister: 'auto',
+        // 运行时自己注册, 以便接管轮询检查和自动刷新.
+        injectRegister: false,
         // 开发环境不开 SW, 避免缓存干扰热更新.
         devOptions: { enabled: false },
         includeAssets: ['pwa-icon.svg'],

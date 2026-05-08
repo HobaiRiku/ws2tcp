@@ -5,6 +5,7 @@ import {
   allComponents
 } from '@fluentui/web-components'
 import App from './App.vue'
+import { registerPWA } from './pwa'
 import router from './router'
 import { i18n } from './i18n'
 import { onNetworkError } from './api/client'
@@ -18,6 +19,7 @@ const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 app.use(i18n)
+registerPWA(router)
 
 // pinia 装上后才能拿到 store 实例.
 const health = useHealthStore(pinia)
