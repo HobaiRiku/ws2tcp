@@ -20,7 +20,7 @@ ws2tcp 是一个 WebSocket → TCP 代理工具。在反向代理只放 HTTP(S) 
 
 - **单二进制**：Go 实现，跨平台 (macOS / Linux / Windows)，静态链接，无运行时依赖。
 - **服务化运行**：基于 [`kardianos/service`](https://github.com/kardianos/service)，一条 `ws2tcp install` 注册成 launchd / systemd / Windows SCM 服务。
-- **Web 管理面板**：内嵌 Vue 3 SPA，无需额外部署，支持 token 鉴权、双语 (中/英)、实时事件流、行内日志查看。
+- **Web 管理面板**：内嵌 Vue 3 SPA，无需额外部署。
 - **端到端加密**：信令层 AES-256 (固定 key)，数据面可选每连接一次性 32 字节 e2e key (`use_encryption=true`)。
 - **ACL**：每个 server-side client 可挂 CIDR + 端口范围白名单，签发不同凭据。
 - **热配置**：API 改完即生效；listen / TLS / aes_key 这类传输层字段自动重启对应子系统而不是整进程。
@@ -33,11 +33,41 @@ ws2tcp 是一个 WebSocket → TCP 代理工具。在反向代理只放 HTTP(S) 
 - 已有 HTTPS 反代 (nginx, caddy, Cloudflare 等)，想复用证书与边界鉴权
 - 把私有 TCP 协议串联到 CI / SaaS 的 webhook 链路
 
-不打算覆盖：通用 SOCKS/HTTP 代理、L7 网关、大并发负载均衡。
+---
+
+## 使用注意事项
+
+- 仅应在**管理员或系统所有者明确授权**的前提下使用，尤其是生产环境、公司网络、云主机、堡垒机和数据库网段。
+- `aes_key`、`http_token`、`client_id`、`client_secret` 等都应视为敏感凭据，避免提交到仓库、聊天记录、工单截图或公开日志。
+- 建议为不同环境、不同 client 分配独立凭据，最小化 ACL 授权范围，并定期轮换密钥和 secret。
+- 如果用于生产运维，建议通过 HTTPS/WSS 反向代理、限制管理面访问来源，并确保日志与配置文件权限只对受信账号开放。
 
 ---
 
 ## 快速开始
+
+### 通过 Homebrew 安装
+
+```bash
+brew tap HobaiRiku/tap
+brew install --cask ws2tcp
+ws2tcp version
+ws2tcp run
+```
+
+首次启动会生成 `~/.ws2tcp/config.yaml`，含一个随机的管理 token、一把随机 AES key，以及一份可直接自测的样例配置。
+
+打开 `http://127.0.0.1:7321`，从 `~/.ws2tcp/config.yaml` 里 `app.http_token` 复制 token 登录，即可开始配置。
+
+### 安装为系统服务
+
+```bash
+sudo ws2tcp install       # 注册成 launchd/systemd/SCM
+sudo ws2tcp start
+ws2tcp status
+```
+
+服务环境会把 `WS2TCP_HOME` pin 到安装时的解析路径，避免 root 起服务时找不到用户配置。
 
 ### 下载或自行构建
 
@@ -45,29 +75,11 @@ ws2tcp 是一个 WebSocket → TCP 代理工具。在反向代理只放 HTTP(S) 
 git clone https://github.com/HobaiRiku/ws2tcp.git
 cd ws2tcp
 make build               # 产物: build/bin/ws2tcp (含 Web UI)
+./build/bin/ws2tcp version
+./build/bin/ws2tcp run
 ```
 
 构建依赖：Go 1.23+、`pnpm` (或 `corepack enable`)，`make`。
-
-### 第一次运行
-
-```bash
-./build/bin/ws2tcp run                # 前台运行, 默认 WS2TCP_HOME=$HOME/.ws2tcp
-```
-
-首次启动会生成 `~/.ws2tcp/config.yaml`，含一个随机的管理 token、一把随机 AES key，以及一份"server + client + 一个 tunnel 指向 127.0.0.1:22"的可立刻自测的样例配置。
-
-打开 `http://127.0.0.1:7321`，从 `~/.ws2tcp/config.yaml` 里 `app.http_token` 复制 token 登录，即可开始配置。
-
-### 安装为系统服务
-
-```bash
-sudo ./build/bin/ws2tcp install       # 注册成 launchd/systemd/SCM
-sudo ./build/bin/ws2tcp start
-ws2tcp status
-```
-
-服务环境会把 `WS2TCP_HOME` pin 到安装时的解析路径，避免 root 起服务时找不到用户配置。
 
 ---
 
@@ -123,7 +135,42 @@ client:
           target_port: 22
 ```
 
-部署到反向代理后面（典型场景）：把 nginx 的某个 `location /connect` 配 `proxy_pass` + `Upgrade` 头，让 WS 升级落到 `0.0.0.0:3005` 即可。完整 nginx 例子见 `docs/`。
+---
+
+## Nginx 反向代理示例
+
+假设：
+
+- 公网域名：`tunnel.example.com`
+- ws2tcp server 监听：`127.0.0.1:3005`
+- `server.ws_path`：`/connect`
+
+建议的 `location` 配置：
+
+```nginx
+location /connect {
+    proxy_pass http://127.0.0.1:3005;
+    proxy_http_version 1.1;
+
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+    proxy_buffering off;
+}
+```
+
+建议同时注意：
+
+- `location` 路径要和 `server.ws_path` 完全一致。
+- 如果前面已经由 Nginx 终止 TLS，ws2tcp server 可以只监听本地 HTTP；外部 client 侧使用 `wss: true` 即可。
+- 如果你打算让 ACL 基于真实来源 IP 生效，再配合 `server.trust_proxy=true` 使用，并确保前置代理是你自己可控的。
 
 ---
 
@@ -206,57 +253,10 @@ make ui-typecheck    # 前端类型检查
 make ui-lint         # 前端 lint
 ```
 
-发布构建：
-
-```bash
-make all             # 等价 make ui-build && make build (本机平台)
-# 产物: build/bin/ws2tcp (内嵌 SPA)
-```
-
-GitHub Actions 会在 `push` / `pull_request` 上跑测试、前端检查和发布构建校验；推送 `v*` tag（例如 `v0.1.0`）会自动触发 GoReleaser，发布 GitHub Release、上传多平台产物，并自动生成 changelog。
-
-跨平台批量构建：
-
-```bash
-make dist                                     # 全矩阵 (darwin/linux/windows × amd64/arm64/arm)
-make dist DIST_TARGETS="linux/amd64 linux/arm64"   # 只构建子集
-make dist-list                                # 看当前矩阵
-make dist-clean                               # 清空 build/dist/
-```
-
-产物落在 `build/dist/`，命名形如 `ws2tcp_<version>_<os>_<arch>[.exe]`，并附一份 `SHA256SUMS` 供发布页校验。全部 `CGO_ENABLED=0 + -trimpath`，输出静态二进制，不依赖 host 的 libc 版本。
-
-本地预演发布流程：
-
-```bash
-make release-check
-make release-snapshot
-```
-
-要让 GitHub Actions 自动更新 Homebrew tap，需要在仓库 Secrets 里配置：
-
-- `HOMEBREW_TAP_GITHUB_TOKEN`: 对 `HobaiRiku/homebrew-tap` 有写权限的 GitHub token
-
-发布后可通过 Homebrew 安装：
-
-```bash
-brew tap HobaiRiku/tap
-brew install --cask ws2tcp
-```
-
 ---
 
-## 安全契约
 
-- 管理 token 缺失 = API 全部 401。**没有兜底默认值**，不要依赖任何 "change-me" 占位字符串。
-- 信令层 AES key (`server.aes_key` / `endpoint.aes_key`) 必须 32 字节，建议 `openssl rand -hex 16` 重生成。
-- `trust_proxy=true` 才会读 `X-Forwarded-For` / `X-Real-IP`，且 ACL 也基于该 IP — 只有当前面是受信反代才能开。
-- 数据面默认开启端到端加密；除非性能场景验证过，不建议关。
-- replay 防护是**进程内 in-memory**：重启 server 即清空。
-
----
-
-## 与原 Node.js 实现的关系
+## 原 Node.js 实现
 
 仓库 `legacy/` 保留原 Node 实现 (`client.mjs` + `server.mjs`)，仅作为 wire-format 参考。当前主线开发都在 Go 二进制上：单进程同时跑两个角色、自带管理面板、可服务化、有 e2e 套件。
 
@@ -267,6 +267,3 @@ brew install --cask ws2tcp
 ## 协议许可
 
 [MIT License](LICENSE) © 2026 HobaiRiku
-
-如果你要把它用到生产环境，请先：
-1. 用 `make build` 自构一份；2. 确认 `app.http_token` 是真随机；3. 用 nginx + Let's Encrypt 包一层 wss；4. ACL 收紧到最小授权范围。
