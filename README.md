@@ -1,52 +1,54 @@
 # ws2tcp
 
-> 把 TCP 流量经 WebSocket 隧穿过 HTTP/HTTPS 反向代理 — 单二进制、自带 Web 管理面板。
+> Tunnel TCP traffic over WebSocket through HTTP/HTTPS reverse proxies — single binary, built-in Web UI.
 
-ws2tcp 是一个 WebSocket → TCP 代理工具。在反向代理只放 HTTP(S) 流量、却又需要让 SSH / 数据库 / 自定义 TCP 协议从外面进来的场景里，把客户端 TCP 连接包成 WebSocket 上行到服务端，再由服务端拨号到真实 TCP 目标。
+ws2tcp is a WebSocket → TCP proxy. When your reverse proxy only allows HTTP(S) but you need SSH, database, or custom TCP protocols to reach through, ws2tcp wraps the client-side TCP connection into a WebSocket, forwards it to the server, and the server dials the real TCP target.
 
 ```
 ┌──────────┐  TCP    ┌────────────┐  WS / WSS   ┌────────────┐  TCP   ┌──────────┐
 │ ssh / db │ ─────▶  │ ws2tcp     │ ──────────▶ │ nginx /    │ ─────▶ │ ws2tcp   │ ─────▶ target:22 / :3306 / ...
 │ client   │         │ (client)   │             │ caddy /…   │        │ (server) │
 └──────────┘         └────────────┘             └────────────┘        └──────────┘
-                       本地监听                   仅放 HTTP(S)            内网拨号
+                      local listener             HTTP(S) only          LAN dial
 ```
 
-同一个二进制可以同时做 server、client 或两者，配置由 `~/.ws2tcp/config.yaml` 驱动。Web 管理面板内嵌进二进制，访问 `http://127.0.0.1:7321` 即可增删改 endpoint / tunnel / client，并实时看连接数与日志。
+A single binary can act as server, client, or both simultaneously — driven by `~/.ws2tcp/config.yaml`. The Web UI is embedded in the binary; open `http://127.0.0.1:7321` to manage endpoints, tunnels, and clients, and to monitor live connections and logs.
+
+[中文文档](README_zh.md)
 
 ---
 
-## 主要特性
+## Features
 
-- **单二进制**：Go 实现，跨平台 (macOS / Linux / Windows)，静态链接，无运行时依赖。
-- **服务化运行**：基于 [`kardianos/service`](https://github.com/kardianos/service)，一条 `ws2tcp install` 注册成 launchd / systemd / Windows SCM 服务。
-- **Web 管理面板**：内嵌 Vue 3 SPA，无需额外部署。
-- **端到端加密**：信令层 AES-256 (固定 key)，数据面可选每连接一次性 32 字节 e2e key (`use_encryption=true`)。
-- **ACL**：每个 server-side client 可挂 CIDR + 端口范围白名单，签发不同凭据。
-- **热配置**：API 改完即生效；listen / TLS / aes_key 这类传输层字段自动重启对应子系统而不是整进程。
-
----
-
-## 适用场景
-
-- 内网 SSH / 数据库需要从外网访问，但出口只放 80/443
-- 已有 HTTPS 反代 (nginx, caddy, Cloudflare 等)，想复用证书与边界鉴权
-- 把私有 TCP 协议串联到 CI / SaaS 的 webhook 链路
+- **Single binary**: Written in Go, cross-platform (macOS / Linux / Windows), statically linked, no runtime dependencies.
+- **System service**: Powered by [`kardianos/service`](https://github.com/kardianos/service) — one `ws2tcp install` registers it as a launchd / systemd / Windows SCM service.
+- **Embedded Web UI**: Vue 3 SPA bundled in, no separate deployment needed.
+- **End-to-end encryption**: AES-256 signaling layer (fixed key); optionally a per-connection 32-byte one-time e2e key for the data plane (`use_encryption=true`).
+- **ACL**: Per-client CIDR + port-range allowlists with independent credentials.
+- **Hot reload**: API changes apply immediately; transport-layer fields (listen / TLS / aes_key) automatically restart the relevant subsystem, not the whole process.
 
 ---
 
-## 使用注意事项
+## Use cases
 
-- 仅应在**管理员或系统所有者明确授权**的前提下使用，尤其是生产环境、公司网络、云主机、堡垒机和数据库网段。
-- `aes_key`、`http_token`、`client_id`、`client_secret` 等都应视为敏感凭据，避免提交到仓库、聊天记录、工单截图或公开日志。
-- 建议为不同环境、不同 client 分配独立凭据，最小化 ACL 授权范围，并定期轮换密钥和 secret。
-- 如果用于生产运维，建议通过 HTTPS/WSS 反向代理、限制管理面访问来源，并确保日志与配置文件权限只对受信账号开放。
+- Internal SSH or database that needs to be reachable from outside, but the only egress is port 80/443
+- Existing HTTPS reverse proxy (nginx, caddy, Cloudflare, etc.) you want to reuse for certificate termination and edge auth
+- Private TCP protocol that needs to plug into CI / SaaS webhook pipelines
 
 ---
 
-## 快速开始
+## Important notes
 
-### 通过 Homebrew 安装
+- Use only with **explicit authorization from the administrator or system owner**, especially in production, corporate networks, cloud hosts, jump servers, and database segments.
+- Treat `aes_key`, `http_token`, `client_id`, and `client_secret` as sensitive credentials — keep them out of repositories, chat logs, ticket screenshots, and public logs.
+- Assign independent credentials per environment and per client; minimize ACL scope; rotate keys and secrets regularly.
+- For production deployments: put the management UI behind HTTPS/WSS, restrict its source IP, and ensure log and config files are readable only by trusted accounts.
+
+---
+
+## Quick start
+
+### Install via Homebrew
 
 ```bash
 brew tap HobaiRiku/tap
@@ -55,43 +57,43 @@ ws2tcp version
 ws2tcp run
 ```
 
-首次启动会生成 `~/.ws2tcp/config.yaml`，含一个随机的管理 token、一把随机 AES key，以及一份可直接自测的样例配置。
+On first launch, `~/.ws2tcp/config.yaml` is generated with a random admin token, a random AES key, and a ready-to-use sample configuration.
 
-打开 `http://127.0.0.1:7321`，从 `~/.ws2tcp/config.yaml` 里 `app.http_token` 复制 token 登录，即可开始配置。
+Open `http://127.0.0.1:7321`, copy `app.http_token` from `~/.ws2tcp/config.yaml`, and log in to start configuring.
 
-### 安装为系统服务
+### Run as a system service
 
 ```bash
-sudo ws2tcp install       # 注册成 launchd/systemd/SCM
+sudo ws2tcp install       # register with launchd/systemd/SCM
 sudo ws2tcp start
 ws2tcp status
 ```
 
-服务环境会把 `WS2TCP_HOME` pin 到安装时的解析路径，避免 root 起服务时找不到用户配置。
+The service environment pins `WS2TCP_HOME` to the path resolved at install time, so the correct config is found even when running as root.
 
-### 下载或自行构建
+### Build from source
 
 ```bash
 git clone https://github.com/HobaiRiku/ws2tcp.git
 cd ws2tcp
-make build               # 产物: build/bin/ws2tcp (含 Web UI)
+make build               # output: build/bin/ws2tcp (with embedded Web UI)
 ./build/bin/ws2tcp version
 ./build/bin/ws2tcp run
 ```
 
-构建依赖：Go 1.23+、`pnpm` (或 `corepack enable`)，`make`。
+Build requirements: Go 1.23+, `pnpm` (or `corepack enable`), `make`.
 
 ---
 
-## 配置示例
+## Configuration example
 
 ```yaml
 app:
   http_listen: 127.0.0.1:7321
   http_auth: true
-  http_token: 7c2d4b...e1               # 首次 init 自动随机生成
+  http_token: 7c2d4b...e1               # auto-generated randomly on first init
   log_level: info
-  log_console: false                   # 同时镜像到 stderr/stdout（默认关闭）
+  log_console: false                   # mirror to stderr/stdout (off by default)
   log_max_size_mb: 20
   log_max_backups: 10
   log_max_age_days: 14
@@ -100,8 +102,8 @@ app:
 server:
   listen: 0.0.0.0:3005
   ws_path: /connect
-  aes_key: njpjvjkgfykgpqpcksvjydvlctgznlnz   # 32 字节, 信令层
-  use_encryption: true                  # 数据面端到端加密
+  aes_key: njpjvjkgfykgpqpcksvjydvlctgznlnz   # 32 bytes, signaling layer
+  use_encryption: true                  # data-plane end-to-end encryption
   trust_proxy: false
   tls:
     enabled: false
@@ -137,15 +139,15 @@ client:
 
 ---
 
-## Nginx 反向代理示例
+## Nginx reverse proxy example
 
-假设：
+Assumptions:
 
-- 公网域名：`tunnel.example.com`
-- ws2tcp server 监听：`127.0.0.1:3005`
-- `server.ws_path`：`/connect`
+- Public domain: `tunnel.example.com`
+- ws2tcp server listening on: `127.0.0.1:3005`
+- `server.ws_path`: `/connect`
 
-建议的 `location` 配置：
+Recommended `location` block:
 
 ```nginx
 location /connect {
@@ -166,48 +168,48 @@ location /connect {
 }
 ```
 
-建议同时注意：
+Notes:
 
-- `location` 路径要和 `server.ws_path` 完全一致。
-- 如果前面已经由 Nginx 终止 TLS，ws2tcp server 可以只监听本地 HTTP；外部 client 侧使用 `wss: true` 即可。
-- 如果你打算让 ACL 基于真实来源 IP 生效，再配合 `server.trust_proxy=true` 使用，并确保前置代理是你自己可控的。
+- The `location` path must exactly match `server.ws_path`.
+- If Nginx is already terminating TLS, ws2tcp server can listen on plain HTTP locally; set `wss: true` on the client side.
+- To enforce ACL based on real client IPs, combine with `server.trust_proxy=true` — only do this if you control the upstream proxy.
 
 ---
 
-## 命令一览
+## Commands
 
 ```text
-ws2tcp run          # 前台运行
-ws2tcp install      # 注册为 OS 服务 (kardianos)
-ws2tcp uninstall    # 注销
-ws2tcp start/stop   # 通过 OS 服务管理器启停
-ws2tcp status       # 当前服务状态
-ws2tcp tail         # 最近 10 条日志 + 实时跟踪
+ws2tcp run          # run in foreground
+ws2tcp install      # register as OS service (kardianos)
+ws2tcp uninstall    # deregister
+ws2tcp start/stop   # start/stop via OS service manager
+ws2tcp status       # current service status
+ws2tcp tail         # last 10 log lines + live follow
 
 ws2tcp server …         # server show|enable|disable|update
 ws2tcp server-client …  # server-side client identity CRUD
 ws2tcp endpoint …       # reusable endpoint CRUD
 ws2tcp client …         # client profile CRUD
 ws2tcp tunnel …         # tunnel CRUD / global listing
-ws2tcp config …     # 查看 / 校验 / 导出配置
-ws2tcp version      # 版本 + 构建信息
+ws2tcp config …     # view / validate / export config
+ws2tcp version      # version + build info
 ```
 
-所有命令都接受 `--home <path>` 覆盖 `WS2TCP_HOME` 环境变量。
+All commands accept `--home <path>` to override the `WS2TCP_HOME` environment variable.
 
-日志默认同时写入两处：
+Logs are written to two destinations by default:
 
-- `logs/ws2tcp.log`（带内建翻转与保留策略）
-- 进程 stderr/stdout（便于 `ws2tcp run`、launchd、systemd、SCM 接管）
+- `logs/ws2tcp.log` (with built-in rotation and retention)
+- Process stderr/stdout (for `ws2tcp run`, launchd, systemd, SCM capture)
 
-`app.log_console` 默认是 `false`。只有在你明确希望同时把日志镜像到 stderr/stdout（例如前台调试）时再打开；系统服务场景建议继续保持关闭，只保留 `logs/` 这一套可控日志。
+`app.log_console` defaults to `false`. Only enable it when you explicitly want logs mirrored to stderr/stdout (e.g. foreground debugging); for system service deployments, keep it off and rely on `logs/`.
 
 ---
 
-## 架构
+## Architecture
 
 ```
-       ┌────────────── ws2tcp 二进制 ──────────────┐
+       ┌────────────── ws2tcp binary ──────────────┐
        │                                            │
        │  cmd/ (cobra)         internal/service/    │
        │     │                       │              │
@@ -225,45 +227,61 @@ ws2tcp version      # 版本 + 构建信息
        └──────────────────────────────────────────────┘
 ```
 
-- **`internal/core/server`** 负责 WS upgrade、handshake 校验、replay 防护、目标 dial、streamUp 帧。
-- **`internal/core/client`** 监听本地 TCP，每接受一条就开一条独立 ws，等服务端的 streamUp 后桥接。
-- **`internal/core/wsproxy`** 双向 `io.Copy`，关闭分类聪明 (EOF / EPIPE / ECONNRESET / use of closed connection 等都不当告警)。
-- **`internal/services/registry`** 用 `atomic.Pointer[snapshot]` 做无锁热路径，写入走 `Apply`，已建立的连接持有旧快照不会半更新。
-- **`internal/services/events`** 进程内事件总线，所有 slog 日志、tunnel 状态变更、连接增减都会广播。
-- **`internal/web/embed.go`** 默认占位；`internal/web/embed_ui.go` (`//go:build embedui`) 才真正 `//go:embed` SPA — `make build` 会带上这个 tag。
+- **`internal/core/server`** handles WS upgrade, handshake validation, replay protection, target dial, and the streamUp frame.
+- **`internal/core/client`** listens for local TCP connections; each accepted connection opens a dedicated WebSocket and bridges after the server's streamUp.
+- **`internal/core/wsproxy`** bidirectional `io.Copy` with clean close classification (EOF / EPIPE / ECONNRESET / "use of closed connection" are not logged as warnings).
+- **`internal/services/registry`** lock-free hot path via `atomic.Pointer[snapshot]`; writes go through `Apply`; established connections hold the old snapshot and are never partially updated.
+- **`internal/services/events`** in-process event bus broadcasting all slog entries, tunnel state changes, and connection counts.
+- **`internal/web/embed.go`** placeholder by default; `internal/web/embed_ui.go` (`//go:build embedui`) actually `//go:embed` the SPA — `make build` includes this tag.
 
-详细设计见 `docs/design/`。
+Detailed design docs are in `docs/design/`.
 
 ---
 
-## 开发
+## Development
 
 ```bash
-# 后端 + 占位 UI (访问 / 拿到 "UI 未构建" 提示页)
+# backend + placeholder UI (visiting / returns "UI not built" page)
 make run
 
-# 在另一个终端起 vite (端口 5266), /api 自动 proxy 到 7321
+# in a second terminal: start vite (port 5266), /api proxied to 7321
 make ui-dev
 ```
 
 ```bash
-make test            # 单元测试 (秒级)
-make test-e2e        # in-process 端到端: 真起 server+client+tunnel, 经 echo target 字节回环
-make ui-typecheck    # 前端类型检查
-make ui-lint         # 前端 lint
+make test            # unit tests (fast)
+make test-e2e        # in-process end-to-end: real server+client+tunnel, byte round-trip through echo target
+make ui-typecheck    # frontend type check
+make ui-lint         # frontend lint
 ```
 
+GitHub Actions runs tests, frontend checks, and a release build validation on every `push` / `pull_request`. Pushing a `v*` tag (e.g. `v0.1.0`) triggers GoReleaser: publishes a GitHub Release with multi-platform artifacts and auto-generated changelog, and commits the updated Homebrew cask to the tap.
+
+To skip CI for a commit, include `[skip ci]` in the commit message:
+
+```bash
+git commit -m "docs: fix typo [skip ci]"
+```
+
+Local release dry-run:
+
+```bash
+make release-check
+make release-snapshot
+```
+
+The `HOMEBREW_TAP_GITHUB_TOKEN` repository secret must be set to a token with write access to `HobaiRiku/homebrew-tap` for the tap update to work.
+
 ---
 
+## Legacy Node.js implementation
 
-## 原 Node.js 实现
+`legacy/` retains the original Node implementation (`client.mjs` + `server.mjs`) as a wire-format reference only. Active development is on the Go binary: single process for both roles, embedded management UI, service integration, and an e2e test suite.
 
-仓库 `legacy/` 保留原 Node 实现 (`client.mjs` + `server.mjs`)，仅作为 wire-format 参考。当前主线开发都在 Go 二进制上：单进程同时跑两个角色、自带管理面板、可服务化、有 e2e 套件。
-
-帧格式 (handshake + streamUp + e2e 加密分块) 与 Node 版兼容；只要双端 `aes_key` 一致，新旧实现可以互通。
+The frame format (handshake + streamUp + e2e encrypted chunks) is compatible with the Node version; as long as both sides share the same `aes_key`, old and new implementations interoperate.
 
 ---
 
-## 协议许可
+## License
 
 [MIT License](LICENSE) © 2026 HobaiRiku
