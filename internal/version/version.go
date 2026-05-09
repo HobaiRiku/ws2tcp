@@ -2,7 +2,10 @@
 // Values are overridden at link time via -ldflags "-X websocket2Tcp/internal/version.Version=...".
 package version
 
-import "runtime"
+import (
+	"runtime"
+	"strings"
+)
 
 var (
 	Version   = "dev"
@@ -17,15 +20,30 @@ type Info struct {
 	GoVersion string `json:"go_version"`
 }
 
+func shortCommit() string {
+	if len(Commit) > 7 {
+		return Commit[:7]
+	}
+	return Commit
+}
+
+func shortDate() string {
+	// BuildDate is RFC3339, e.g. "2026-05-09T08:03:00Z" — keep only the date part.
+	if idx := strings.IndexByte(BuildDate, 'T'); idx > 0 {
+		return BuildDate[:idx]
+	}
+	return BuildDate
+}
+
 func Current() Info {
 	return Info{
 		Version:   Version,
-		Commit:    Commit,
-		BuildDate: BuildDate,
+		Commit:    shortCommit(),
+		BuildDate: shortDate(),
 		GoVersion: runtime.Version(),
 	}
 }
 
 func String() string {
-	return "ws2tcp " + Version + " (" + Commit + ", built " + BuildDate + ", " + runtime.Version() + ")"
+	return "ws2tcp " + Version + " (" + shortCommit() + ", " + shortDate() + ")"
 }
