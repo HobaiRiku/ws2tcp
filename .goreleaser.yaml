@@ -1,0 +1,117 @@
+version: 2
+
+project_name: ws2tcp
+
+before:
+  hooks:
+    - go mod download
+    - pnpm --dir ui install --frozen-lockfile
+    - pnpm --dir ui run build
+
+builds:
+  - id: core
+    main: .
+    binary: ws2tcp
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    tags:
+      - embedui
+    ldflags:
+      - -s -w
+      - -X websocket2Tcp/internal/version.Version={{ .Version }}
+      - -X websocket2Tcp/internal/version.Commit={{ .Commit }}
+      - -X websocket2Tcp/internal/version.BuildDate={{ .Date }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+  - id: linux-armv7
+    main: .
+    binary: ws2tcp
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    tags:
+      - embedui
+    ldflags:
+      - -s -w
+      - -X websocket2Tcp/internal/version.Version={{ .Version }}
+      - -X websocket2Tcp/internal/version.Commit={{ .Commit }}
+      - -X websocket2Tcp/internal/version.BuildDate={{ .Date }}
+    goos:
+      - linux
+    goarch:
+      - arm
+    goarm:
+      - "7"
+
+archives:
+  - id: bundled
+    ids:
+      - core
+      - linux-armv7
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ if and (eq .Os "linux") (eq .Arch "arm") }}armv7{{ else }}{{ .Arch }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^tests:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  github:
+    owner: HobaiRiku
+    name: ws2tcp
+  name_template: "{{ .ProjectName }} {{ .Version }}"
+  prerelease: auto
+
+homebrew_casks:
+  - name: ws2tcp
+    ids:
+      - bundled
+    binaries:
+      - ws2tcp
+    repository:
+      owner: HobaiRiku
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/HobaiRiku/ws2tcp
+    description: WebSocket tunnel for transparent TCP forwarding with end-to-end encryption.
+    url:
+      verified: github.com/HobaiRiku/ws2tcp/
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: "brew: update ws2tcp cask to {{ .Tag }}"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ws2tcp"]
+          end

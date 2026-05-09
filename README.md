@@ -42,8 +42,8 @@ ws2tcp 是一个 WebSocket → TCP 代理工具。在反向代理只放 HTTP(S) 
 ### 下载或自行构建
 
 ```bash
-git clone https://github.com/<your-org>/websocket2Tcp.git
-cd websocket2Tcp
+git clone https://github.com/HobaiRiku/ws2tcp.git
+cd ws2tcp
 make build               # 产物: build/bin/ws2tcp (含 Web UI)
 ```
 
@@ -213,6 +213,8 @@ make all             # 等价 make ui-build && make build (本机平台)
 # 产物: build/bin/ws2tcp (内嵌 SPA)
 ```
 
+GitHub Actions 会在 `push` / `pull_request` 上跑测试、前端检查和发布构建校验；推送 `v*` tag（例如 `v0.1.0`）会自动触发 GoReleaser，发布 GitHub Release、上传多平台产物，并自动生成 changelog。
+
 跨平台批量构建：
 
 ```bash
@@ -223,6 +225,24 @@ make dist-clean                               # 清空 build/dist/
 ```
 
 产物落在 `build/dist/`，命名形如 `ws2tcp_<version>_<os>_<arch>[.exe]`，并附一份 `SHA256SUMS` 供发布页校验。全部 `CGO_ENABLED=0 + -trimpath`，输出静态二进制，不依赖 host 的 libc 版本。
+
+本地预演发布流程：
+
+```bash
+make release-check
+make release-snapshot
+```
+
+要让 GitHub Actions 自动更新 Homebrew tap，需要在仓库 Secrets 里配置：
+
+- `HOMEBREW_TAP_GITHUB_TOKEN`: 对 `HobaiRiku/homebrew-tap` 有写权限的 GitHub token
+
+发布后可通过 Homebrew 安装：
+
+```bash
+brew tap HobaiRiku/tap
+brew install --cask ws2tcp
+```
 
 ---
 

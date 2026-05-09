@@ -33,6 +33,7 @@ DIST_DIR  := build/dist
 UI_DIR    := ui
 EMBED_DIR := internal/web/static
 LOCAL_HOME := $(CURDIR)/.ws2tcp-home
+GORELEASER ?= GOPROXY=https://proxy.golang.org,direct GOSUMDB=sum.golang.org go run github.com/goreleaser/goreleaser/v2@v2.12.7
 
 PKG := ./...
 
@@ -60,7 +61,7 @@ DIST_TARGETS := \
 .PHONY: all build run dev tidy fmt vet test test-unit test-e2e \
 	ui ui-install ui-dev ui-build ui-clean ui-lint ui-lint-fix ui-format ui-typecheck \
 	web web-install web-dev web-build web-clean web-lint web-lint-fix web-format web-typecheck \
-	clean release print-version dist dist-clean dist-list
+	clean release release-snapshot release-check print-version dist dist-clean dist-list
 
 all: ui-build build
 
@@ -183,11 +184,16 @@ dist-list:
 clean:
 	rm -rf $(BUILD_DIR) $(DIST_DIR)
 
-# goreleaser 是另一条独立的发布路线 (.goreleaser.yaml 自行维护); 留这个
-# 入口给以后接 GitHub Release 用. 仓库里目前没有 .goreleaser.yaml,
-# 所以这条命令需要先手动加配置文件再跑.
+# goreleaser 用于 GitHub Release / Homebrew tap 发布. 默认通过 go run
+# 固定一个版本, 不要求贡献者全局安装.
 release:
-	goreleaser release --snapshot --clean
+	$(GORELEASER) release --clean
+
+release-snapshot:
+	$(GORELEASER) release --snapshot --clean --skip=publish
+
+release-check:
+	$(GORELEASER) check
 
 print-version:
 	@echo "version=$(VERSION) commit=$(COMMIT) date=$(DATE)"
