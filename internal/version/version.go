@@ -28,11 +28,12 @@ func shortCommit() string {
 }
 
 func shortDate() string {
-	// BuildDate is RFC3339, e.g. "2026-05-09T08:03:00Z" — keep only the date part.
-	if idx := strings.IndexByte(BuildDate, 'T'); idx > 0 {
-		return BuildDate[:idx]
+	// BuildDate is RFC3339, e.g. "2026-05-09T08:03:00Z" → "20260509T080300".
+	s := strings.NewReplacer("-", "", ":", "", "Z", "").Replace(BuildDate)
+	if idx := strings.IndexByte(s, 'T'); idx > 0 {
+		return s[:idx] + s[idx+1:]
 	}
-	return BuildDate
+	return s
 }
 
 func Current() Info {
