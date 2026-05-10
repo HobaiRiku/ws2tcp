@@ -59,6 +59,9 @@ func New(home string) (kservice.Service, *Program, error) {
 		EnvVars: map[string]string{
 			"WS2TCP_HOME": resolved.Home,
 		},
+		Option: kservice.KeyValue{
+			"UserService": true,
+		},
 	})
 	if err != nil {
 		return nil, nil, err
