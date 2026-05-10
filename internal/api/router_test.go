@@ -351,7 +351,6 @@ func TestEventStreamAndWebSocketEndpoints(t *testing.T) {
 	}
 	defer conn.Close(websocket.StatusNormalClosure, "")
 
-	time.Sleep(100 * time.Millisecond)
 	bus.Emit("server.conn.opened", map[string]any{"client_id": "u1"})
 	_, raw, err := conn.Read(ctx)
 	if err != nil {

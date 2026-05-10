@@ -57,6 +57,11 @@ func WebSocketHandler(bus *events.Bus) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"code": "EVENTS_UNAVAILABLE", "message": "event bus not configured"})
 			return
 		}
+		// Subscribe BEFORE Accept so the subscription is live by the time
+		// the client's Dial returns; otherwise events emitted in the gap
+		// between handshake completion and Subscribe are silently dropped.
+		sub := bus.Subscribe(c.Request.Context(), topicFilters(c)...)
+
 		conn, err := websocket.Accept(c.Writer, c.Request, &websocket.AcceptOptions{
 			OriginPatterns: []string{
 				"localhost",
@@ -72,7 +77,6 @@ func WebSocketHandler(bus *events.Bus) gin.HandlerFunc {
 		}
 		defer conn.Close(websocket.StatusNormalClosure, "")
 
-		sub := bus.Subscribe(c.Request.Context(), topicFilters(c)...)
 		for msg := range sub {
 			raw, err := json.Marshal(msg)
 			if err != nil {
