@@ -99,7 +99,14 @@ func Install(home string) error {
 	if err != nil {
 		return err
 	}
-	return svc.Install()
+	// Clear any stale launchd registration before writing the new plist;
+	// otherwise a previous (e.g. sudo) install can leave a cached entry that
+	// makes subsequent `launchctl load` fail with "Input/output error".
+	darwinBootout()
+	if err := svc.Install(); err != nil {
+		return err
+	}
+	return darwinBootstrap()
 }
 
 // Uninstall removes the service registration from the OS service manager.
@@ -108,11 +115,15 @@ func Uninstall(home string) error {
 	if err != nil {
 		return err
 	}
+	darwinBootout()
 	return svc.Uninstall()
 }
 
 // Start requests the OS service manager to start the registered service.
 func Start(home string) error {
+	if started, err := darwinKickstart(); started {
+		return err
+	}
 	svc, _, err := New(home)
 	if err != nil {
 		return err
@@ -122,6 +133,9 @@ func Start(home string) error {
 
 // Stop requests the OS service manager to stop the registered service.
 func Stop(home string) error {
+	if stopped, err := darwinKill(); stopped {
+		return err
+	}
 	svc, _, err := New(home)
 	if err != nil {
 		return err
