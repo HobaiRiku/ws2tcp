@@ -61,11 +61,34 @@ On first launch, `~/.ws2tcp/config.yaml` is generated with a random admin token,
 
 Open `http://127.0.0.1:7321`, copy `app.http_token` from `~/.ws2tcp/config.yaml`, and log in to start configuring.
 
+### Install from binary (Linux / Windows)
+
+Grab the matching archive from the [Releases page](https://github.com/HobaiRiku/ws2tcp/releases), then drop the binary into a directory on your `PATH`.
+
+Linux (`/usr/local/bin` is the conventional location for user-installed binaries):
+
+```bash
+tar -xzf ws2tcp_*_linux_amd64.tar.gz
+sudo install -m 0755 ws2tcp /usr/local/bin/ws2tcp
+ws2tcp version
+ws2tcp run
+```
+
+Windows (PowerShell — `%LOCALAPPDATA%\Programs\ws2tcp` keeps it per-user and avoids needing admin):
+
+```powershell
+Expand-Archive ws2tcp_*_windows_amd64.zip -DestinationPath $env:LOCALAPPDATA\Programs\ws2tcp
+[Environment]::SetEnvironmentVariable('Path', $env:Path + ";$env:LOCALAPPDATA\Programs\ws2tcp", 'User')
+# open a new terminal so the updated PATH is picked up
+ws2tcp version
+ws2tcp run
+```
+
 ### Run as a system service
 
 ```bash
-sudo ws2tcp install       # register with launchd/systemd/SCM
-sudo ws2tcp start
+ws2tcp install       # register with launchd/systemd/SCM
+ws2tcp start
 ws2tcp status
 ```
 

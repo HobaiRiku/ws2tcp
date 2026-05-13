@@ -59,11 +59,34 @@ ws2tcp run
 
 打开 `http://127.0.0.1:7321`，从 `~/.ws2tcp/config.yaml` 里 `app.http_token` 复制 token 登录，即可开始配置。
 
+### 通过二进制安装 (Linux / Windows)
+
+从 [Releases 页面](https://github.com/HobaiRiku/ws2tcp/releases) 下载对应平台的压缩包，解压后把二进制放到 `PATH` 里的目录即可。
+
+Linux (`/usr/local/bin` 是约定俗成的用户安装位置):
+
+```bash
+tar -xzf ws2tcp_*_linux_amd64.tar.gz
+sudo install -m 0755 ws2tcp /usr/local/bin/ws2tcp
+ws2tcp version
+ws2tcp run
+```
+
+Windows (PowerShell — `%LOCALAPPDATA%\Programs\ws2tcp` 是 per-user 位置，无需管理员权限):
+
+```powershell
+Expand-Archive ws2tcp_*_windows_amd64.zip -DestinationPath $env:LOCALAPPDATA\Programs\ws2tcp
+[Environment]::SetEnvironmentVariable('Path', $env:Path + ";$env:LOCALAPPDATA\Programs\ws2tcp", 'User')
+# 重新打开一个终端让 PATH 生效
+ws2tcp version
+ws2tcp run
+```
+
 ### 安装为系统服务
 
 ```bash
-sudo ws2tcp install       # 注册成 launchd/systemd/SCM
-sudo ws2tcp start
+ws2tcp install       # 注册成 launchd/systemd/SCM
+ws2tcp start
 ws2tcp status
 ```
 
