@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"sync"
 
 	kservice "github.com/kardianos/service"
@@ -51,7 +52,7 @@ func New(home string) (kservice.Service, *Program, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	svc, err := kservice.New(p, &kservice.Config{
+	cfg := &kservice.Config{
 		Name:             serviceName,
 		DisplayName:      serviceDisplayName,
 		Description:      serviceDescription,
@@ -59,10 +60,14 @@ func New(home string) (kservice.Service, *Program, error) {
 		EnvVars: map[string]string{
 			"WS2TCP_HOME": resolved.Home,
 		},
-		Option: kservice.KeyValue{
-			"UserService": true,
-		},
-	})
+		Option: kservice.KeyValue{},
+	}
+	// macOS 用 per-user launchd agent（避免 system 域 SIP 限制 + launchctl bootstrap
+	// 行为差异）。Linux 用系统级 systemd unit，配 root 跑、开机自启更自然。
+	if runtime.GOOS == "darwin" {
+		cfg.Option["UserService"] = true
+	}
+	svc, err := kservice.New(p, cfg)
 	if err != nil {
 		return nil, nil, err
 	}
