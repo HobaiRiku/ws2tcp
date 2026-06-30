@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	hostservice "websocket2Tcp/internal/service"
 	"websocket2Tcp/internal/version"
 )
 
@@ -13,7 +14,16 @@ import (
 // package var (rather than a builder pattern) because cobra binds flags by
 // pointer at registration time.
 var rootFlags struct {
-	Home string
+	Home   string
+	System bool
+}
+
+// rootScope returns the service scope selected by the current flags.
+func rootScope() string {
+	if rootFlags.System {
+		return "system"
+	}
+	return "user"
 }
 
 // Root returns the root cobra command, fully wired with subcommands.
@@ -36,6 +46,11 @@ func Root() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&rootFlags.Home, "home", "",
 		"override WS2TCP_HOME (default $HOME/.ws2tcp)")
+	// --system defaults to true on Linux/Windows, false on macOS, matching
+	// the platform-native service management convention.
+	root.PersistentFlags().BoolVar(&rootFlags.System, "system",
+		hostservice.DefaultScope() == "system",
+		"manage as a system-wide service (default: true on Linux/Windows, false on macOS)")
 	root.Flags().BoolP("version", "v", false, "print version and exit")
 
 	root.AddCommand(
