@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"websocket2Tcp/internal/paths"
@@ -24,6 +25,11 @@ import (
 func darwinDomain(scope string) string {
 	if scope == paths.ScopeSystem {
 		return "system"
+	}
+	if sudoUID := os.Getenv("SUDO_UID"); sudoUID != "" {
+		if uid, err := strconv.Atoi(sudoUID); err == nil && uid >= 0 {
+			return fmt.Sprintf("gui/%d", uid)
+		}
 	}
 	return fmt.Sprintf("gui/%d", os.Getuid())
 }

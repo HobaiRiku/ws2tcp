@@ -24,13 +24,15 @@ func runCmd() *cobra.Command {
 }
 
 func runRun(cmd *cobra.Command, _ []string) error {
+	scope := rootScope()
 	// Resolve the home directory so we can acquire the PID lock before
 	// app.Run spins up any goroutines. Use the scope-derived default if
 	// neither --home nor WS2TCP_HOME is set.
-	p, err := paths.ResolveScope(rootFlags.Home, rootScope())
+	p, err := paths.ResolveScope(rootFlags.Home, scope)
 	if err != nil {
 		return err
 	}
+	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "scope=%s home=%s\n", scope, p.Home)
 
 	pidFile := p.PIDFile()
 	if err := pid.Acquire(pidFile); err != nil {
