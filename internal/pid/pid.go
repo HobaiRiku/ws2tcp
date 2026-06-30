@@ -41,16 +41,42 @@ func Path(home string) string {
 // Acquire writes the current process PID to path. If a live process already
 // holds the file, ErrAlreadyRunning is returned. A stale PID (file exists but
 // process is dead) is silently overwritten.
+//
+// The implementation uses O_EXCL to narrow the TOCTOU race: at most one
+// concurrent starter will successfully create the file. If the file exists
+// but belongs to a dead process it is removed once and the creation is
+// retried, giving the surviving caller the lock.
 func Acquire(path string) error {
-	existing, err := Read(path)
-	if err == nil && IsAlive(existing) {
-		return ErrAlreadyRunning{
-			PID:     existing,
-			Home:    filepath.Dir(path),
-			PIDFile: path,
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return fmt.Errorf("create pid dir: %w", err)
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		if !os.IsExist(err) {
+			return fmt.Errorf("acquire pid lock: %w", err)
+		}
+		// File already exists — check whether the recorded process is alive.
+		existing, readErr := Read(path)
+		if readErr == nil && IsAlive(existing) {
+			return ErrAlreadyRunning{
+				PID:     existing,
+				Home:    filepath.Dir(path),
+				PIDFile: path,
+			}
+		}
+		// Stale entry: remove and try once more with O_EXCL so that a
+		// concurrent starter that also detected the stale file loses the race.
+		_ = os.Remove(path)
+		f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if err != nil {
+			return fmt.Errorf("acquire pid lock after stale removal: %w", err)
 		}
 	}
-	return Write(path, os.Getpid())
+
+	_, writeErr := fmt.Fprintf(f, "%d\n", os.Getpid())
+	_ = f.Close()
+	return writeErr
 }
 
 // Release removes the PID file. Ignores not-exist errors; intended for

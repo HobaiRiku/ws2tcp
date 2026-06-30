@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/pid"
@@ -93,7 +95,9 @@ func (r *Registry) validateTunnelListen(skipClient, skipTunnel, listen, currentL
 		return nil
 	}
 	if err := listenProbe(listen); err != nil {
-		warnPortConflict(listen)
+		if isAddrInUse(err) {
+			warnPortConflict(listen)
+		}
 		return fmt.Errorf("listen %q is not bindable: %w", listen, err)
 	}
 	return nil
@@ -180,4 +184,18 @@ func isDNSName(s string) bool {
 		}
 	}
 	return true
+}
+
+// isErrno unwraps err and reports whether the innermost error equals target.
+// Handles *net.OpError → *os.SyscallError → syscall.Errno chains.
+func isErrno(err error, target syscall.Errno) bool {
+	var syscallErr *os.SyscallError
+	if errors.As(err, &syscallErr) {
+		return errors.Is(syscallErr.Err, target)
+	}
+	var opErr *net.OpError
+	if errors.As(err, &opErr) {
+		return isErrno(opErr.Err, target)
+	}
+	return errors.Is(err, target)
 }
