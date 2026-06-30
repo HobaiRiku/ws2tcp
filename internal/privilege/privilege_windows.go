@@ -10,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"unsafe"
+
+	"websocket2Tcp/internal/paths"
 )
 
 // IsRoot reports whether the current process is running with administrator
@@ -38,7 +40,7 @@ func IsRoot() bool {
 
 // NeedsRoot reports whether scope requires administrator privileges.
 func NeedsRoot(scope string) bool {
-	return scope == "system"
+	return scope == paths.ScopeSystem
 }
 
 // EnsurePrivilege checks that the current process has the privileges required
@@ -48,9 +50,10 @@ func EnsurePrivilege(scope string, args []string) error {
 	if !NeedsRoot(scope) || IsRoot() {
 		return nil
 	}
+	// Display os.Args[0] separately to avoid misleading output for paths with spaces.
 	return fmt.Errorf(
 		"system-scope operations require administrator privileges\n"+
-			"Right-click the terminal and select 'Run as administrator', then retry:\n  %s",
-		strings.Join(os.Args, " "),
+			"Right-click the terminal and select 'Run as administrator', then retry:\n  %s %s",
+		os.Args[0], strings.Join(args, " "),
 	)
 }

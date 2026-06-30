@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+
+	"websocket2Tcp/internal/paths"
 )
 
 // IsRoot reports whether the current process has root (uid 0) privileges.
@@ -21,7 +23,7 @@ func IsRoot() bool {
 // Only the system scope requires elevation; user-scope operations run as
 // the current user.
 func NeedsRoot(scope string) bool {
-	return scope == "system"
+	return scope == paths.ScopeSystem
 }
 
 // EnsurePrivilege checks that the current process has the privileges required
@@ -53,8 +55,8 @@ func EnsurePrivilege(scope string, args []string) error {
 	newArgv = append(newArgv, "sudo", self)
 	newArgv = append(newArgv, args...)
 
-	// syscall.Exec replaces the current process image — if it returns, it
-	// failed.
+	// syscall.Exec replaces the current process image on success and never
+	// returns; defensive error handling below covers the exec-failure path.
 	if execErr := syscall.Exec(sudo, newArgv, os.Environ()); execErr != nil {
 		return fmt.Errorf("exec sudo: %w", execErr)
 	}

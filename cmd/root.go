@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	hostservice "websocket2Tcp/internal/service"
+	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/version"
 )
 
@@ -21,9 +22,9 @@ var rootFlags struct {
 // rootScope returns the service scope selected by the current flags.
 func rootScope() string {
 	if rootFlags.System {
-		return "system"
+		return paths.ScopeSystem
 	}
-	return "user"
+	return paths.ScopeUser
 }
 
 // Root returns the root cobra command, fully wired with subcommands.
