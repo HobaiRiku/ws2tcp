@@ -40,5 +40,7 @@ func runRun(cmd *cobra.Command, _ []string) error {
 
 	ctx, stop := signal.NotifyContext(cmd.Context(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	return hostservice.Run(ctx, rootFlags.Home, true)
+	// Pass the already-resolved path so service.Run uses the same home directory
+	// as the PID lock, regardless of whether --home was set explicitly.
+	return hostservice.Run(ctx, p.Home, true)
 }

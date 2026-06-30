@@ -18,7 +18,9 @@ import (
 // privileges (elevated token).
 func IsRoot() bool {
 	var token syscall.Token
-	proc := syscall.CurrentProcess()
+	// GetCurrentProcess() always returns the constant pseudo-handle -1;
+	// syscall.CurrentProcess() doesn't exist in Go's syscall package.
+	proc := syscall.Handle(^uintptr(0))
 	if err := syscall.OpenProcessToken(proc, syscall.TOKEN_QUERY, &token); err != nil {
 		return false
 	}

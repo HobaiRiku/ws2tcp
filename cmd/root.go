@@ -46,7 +46,7 @@ func Root() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().StringVar(&rootFlags.Home, "home", "",
-		"override WS2TCP_HOME (default $HOME/.ws2tcp)")
+		"override WS2TCP_HOME; if unset, defaults to the system home (e.g. /var/lib/ws2tcp) when --system is true, or $HOME/.ws2tcp otherwise")
 	// --system defaults to true on Linux/Windows, false on macOS, matching
 	// the platform-native service management convention.
 	root.PersistentFlags().BoolVar(&rootFlags.System, "system",
