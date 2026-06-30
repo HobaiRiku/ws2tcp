@@ -27,7 +27,7 @@ func darwinDomain(scope string) string {
 		return "system"
 	}
 	if sudoUID := os.Getenv("SUDO_UID"); sudoUID != "" {
-		if uid, err := strconv.Atoi(sudoUID); err == nil && uid >= 0 {
+		if uid, err := strconv.Atoi(sudoUID); err == nil && uid > 0 {
 			return fmt.Sprintf("gui/%d", uid)
 		}
 	}
