@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/privilege"
 	hostservice "websocket2Tcp/internal/service"
 )
@@ -23,10 +24,15 @@ func installCmd() *cobra.Command {
 			if err := privilege.EnsurePrivilege(scope, os.Args[1:]); err != nil {
 				return err
 			}
-			if err := serviceInstall(rootFlags.Home, scope); err != nil {
-				return fmt.Errorf("install service: %w", err)
+			p, err := paths.ResolveScope(rootFlags.Home, scope)
+			if err != nil {
+				return err
 			}
-			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "service installed")
+			binPath, err := serviceInstall(p.Home, scope)
+			if err != nil {
+				return fmt.Errorf("install service scope=%s home=%s: %w", scope, p.Home, err)
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "service installed scope=%s home=%s bin=%s\n", scope, p.Home, binPath)
 			return nil
 		},
 	}

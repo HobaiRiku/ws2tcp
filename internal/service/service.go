@@ -105,29 +105,73 @@ func RunService(home string) error {
 }
 
 // Install registers the service with the OS service manager.
-func Install(home, scope string) error {
-	svc, _, err := New(home, scope)
-	if err != nil {
-		return err
+func Install(home, scope string) (string, error) {
+	if scope == "" {
+		scope = DefaultScope()
 	}
+	destDir, err := BinDir(scope)
+	if err != nil {
+		return "", err
+	}
+	binPath, err := InstallBin(destDir)
+	if err != nil {
+		return "", err
+	}
+
+	resolved, err := paths.ResolveScope(home, scope)
+	if err != nil {
+		return "", err
+	}
+	p := NewProgram(resolved.Home)
+	cfg := &kservice.Config{
+		Name:             serviceName,
+		DisplayName:      serviceDisplayName,
+		Description:      serviceDescription,
+		Executable:       binPath,
+		WorkingDirectory: resolved.Home,
+		EnvVars: map[string]string{
+			"WS2TCP_HOME": resolved.Home,
+		},
+		Option: kservice.KeyValue{},
+	}
+	if scope == paths.ScopeUser {
+		cfg.Option["UserService"] = true
+	}
+	svc, err := kservice.New(p, cfg)
+	if err != nil {
+		return "", err
+	}
+
 	// Clear any stale launchd registration before writing the new plist;
 	// otherwise a previous (e.g. sudo) install can leave a cached entry that
 	// makes subsequent `launchctl load` fail with "Input/output error".
 	darwinBootout(scope)
 	if err := svc.Install(); err != nil {
-		return err
+		return "", err
 	}
-	return darwinBootstrap(scope)
+	if err := darwinBootstrap(scope); err != nil {
+		return "", err
+	}
+	return binPath, nil
 }
 
 // Uninstall removes the service registration from the OS service manager.
 func Uninstall(home, scope string) error {
+	if scope == "" {
+		scope = DefaultScope()
+	}
 	svc, _, err := New(home, scope)
 	if err != nil {
 		return err
 	}
 	darwinBootout(scope)
-	return svc.Uninstall()
+	if err := svc.Uninstall(); err != nil {
+		return err
+	}
+	if destDir, err := BinDir(scope); err == nil {
+		RemoveBin(destDir)
+	}
+	return nil
 }
 
 // Start requests the OS service manager to start the registered service.

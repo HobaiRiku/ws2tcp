@@ -6,6 +6,7 @@ import (
 	kservice "github.com/kardianos/service"
 	"github.com/spf13/cobra"
 
+	"websocket2Tcp/internal/paths"
 	hostservice "websocket2Tcp/internal/service"
 )
 
@@ -16,11 +17,16 @@ func statusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show ws2tcp service status",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			status, err := serviceStatus(rootFlags.Home, rootScope())
+			scope := rootScope()
+			p, err := paths.ResolveScope(rootFlags.Home, scope)
 			if err != nil {
-				return fmt.Errorf("get service status: %w", err)
+				return err
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s\n", statusString(status))
+			status, err := serviceStatus(p.Home, scope)
+			if err != nil {
+				return fmt.Errorf("get service status scope=%s home=%s: %w", scope, p.Home, err)
+			}
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "scope: %s\nhome: %s\nstatus: %s\n", scope, p.Home, statusString(status))
 			return nil
 		},
 	}
