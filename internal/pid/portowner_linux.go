@@ -38,6 +38,7 @@ func findInodeForPort(path, portHex string) uint64 {
 	}
 	defer f.Close()
 
+	// portHex is already uppercase (formatted with %04X in FindPortOwner).
 	sc := bufio.NewScanner(f)
 	sc.Scan() // skip header line
 	for sc.Scan() {
@@ -55,7 +56,7 @@ func findInodeForPort(path, portHex string) uint64 {
 		}
 		// The port is the hex value after the last ':' in local_address.
 		colon := strings.LastIndex(localAddr, ":")
-		if colon < 0 || strings.ToUpper(localAddr[colon+1:]) != portHex {
+		if colon < 0 || localAddr[colon+1:] != portHex {
 			continue
 		}
 		inode, err := strconv.ParseUint(inodeStr, 10, 64)

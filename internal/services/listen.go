@@ -125,8 +125,10 @@ func defaultWarnPortConflict(addr string) {
 			continue
 		}
 		// Attribution: either we matched the port to this PID directly, or
-		// on platforms without per-port lookup we fall back to checking if
-		// any ws2tcp instance is live (it may be the culprit).
+		// on platforms without per-port lookup (non-Linux) we fall back to
+		// checking whether any live ws2tcp instance might hold the port.
+		// The fallback is a heuristic: a live instance is not guaranteed to
+		// own this specific port, so the warning says "may conflict".
 		if (ownerPID != 0 && knownPID == ownerPID) || (ownerPID == 0 && pid.IsAlive(knownPID)) {
 			slog.Default().Warn("port may conflict with running ws2tcp instance",
 				"addr", addr, "pid", knownPID, "home", home)

@@ -257,6 +257,9 @@ func (p *Program) Start(_ kservice.Service) error {
 	p.runErr = nil
 
 	go func() {
+		// Ensure the PID file is removed even if run panics.
+		defer pid.Release(pidFile)
+
 		err := p.run(ctx, p.home, false)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			p.logger().Error("service exited", "err", err, "home", p.home)
@@ -266,7 +269,6 @@ func (p *Program) Start(_ kservice.Service) error {
 		defer p.mu.Unlock()
 		p.runErr = err
 		p.cancel = nil
-		pid.Release(pidFile)
 		close(done)
 	}()
 

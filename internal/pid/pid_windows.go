@@ -24,7 +24,7 @@ func IsAlive(pid int) bool {
 
 	var exitCode uint32
 	if err := syscall.GetExitCodeProcess(handle, &exitCode); err != nil {
-		return true // can't determine; assume alive
+		return false // can't determine exit status; treat as not alive (fail-safe)
 	}
 	return exitCode == stillActive
 }
