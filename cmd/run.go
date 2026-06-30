@@ -36,7 +36,7 @@ func runRun(cmd *cobra.Command, _ []string) error {
 
 	pidFile := p.PIDFile()
 	if err := pid.Acquire(pidFile); err != nil {
-		return fmt.Errorf("%w", err)
+		return err
 	}
 	defer pid.Release(pidFile)
 

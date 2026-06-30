@@ -66,31 +66,32 @@ func InstallBin(destDir string) (string, error) {
 		return "", fmt.Errorf("create temp binary: %w", err)
 	}
 	tmpPath := tmp.Name()
-	cleanup := func() { _ = os.Remove(tmpPath) }
+	keepTemp := false
+	defer func() {
+		if !keepTemp {
+			_ = os.Remove(tmpPath)
+		}
+	}()
 
 	if _, err := io.Copy(tmp, in); err != nil {
 		_ = tmp.Close()
-		cleanup()
 		return "", fmt.Errorf("copy executable: %w", err)
 	}
 	if err := tmp.Chmod(0o755); err != nil {
 		_ = tmp.Close()
-		cleanup()
 		return "", fmt.Errorf("chmod executable: %w", err)
 	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
-		cleanup()
 		return "", fmt.Errorf("sync executable: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		cleanup()
 		return "", fmt.Errorf("close temp executable: %w", err)
 	}
 	if err := os.Rename(tmpPath, target); err != nil {
-		cleanup()
 		return "", fmt.Errorf("install executable to %s: %w", target, err)
 	}
+	keepTemp = true
 	return target, nil
 }
 
