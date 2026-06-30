@@ -15,7 +15,7 @@ func stopCmd() *cobra.Command {
 		Use:   "stop",
 		Short: "Stop the installed ws2tcp service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := serviceStop(rootFlags.Home); err != nil {
+			if err := serviceStop(rootFlags.Home, rootScope()); err != nil {
 				return fmt.Errorf("stop service: %w", err)
 			}
 			_, _ = fmt.Fprintln(cmd.OutOrStdout(), "service stopped")

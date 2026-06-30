@@ -9,10 +9,11 @@ import (
 )
 
 func TestServiceLifecycleCommands(t *testing.T) {
-	t.Run("install uses root home", func(t *testing.T) {
-		var gotHome string
-		restore := swapInstall(func(home string) error {
+	t.Run("install uses root home and scope", func(t *testing.T) {
+		var gotHome, gotScope string
+		restore := swapInstall(func(home, scope string) error {
 			gotHome = home
+			gotScope = scope
 			return nil
 		})
 		defer restore()
@@ -24,13 +25,16 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		if gotHome != "/tmp/ws2tcp-home" {
 			t.Fatalf("install got home %q", gotHome)
 		}
+		if gotScope == "" {
+			t.Fatal("install scope must not be empty")
+		}
 		if out != "service installed\n" {
 			t.Fatalf("unexpected output %q", out)
 		}
 	})
 
 	t.Run("start reports wrapped error", func(t *testing.T) {
-		restore := swapStart(func(string) error {
+		restore := swapStart(func(string, string) error {
 			return errors.New("boom")
 		})
 		defer restore()
@@ -42,7 +46,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 	})
 
 	t.Run("stop prints success", func(t *testing.T) {
-		restore := swapStop(func(string) error { return nil })
+		restore := swapStop(func(string, string) error { return nil })
 		defer restore()
 
 		out, err := executeRoot(t, "stop")
@@ -55,7 +59,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 	})
 
 	t.Run("uninstall prints success", func(t *testing.T) {
-		restore := swapUninstall(func(string) error { return nil })
+		restore := swapUninstall(func(string, string) error { return nil })
 		defer restore()
 
 		out, err := executeRoot(t, "uninstall")
@@ -68,7 +72,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 	})
 
 	t.Run("status prints mapped service status", func(t *testing.T) {
-		restore := swapStatus(func(string) (kservice.Status, error) {
+		restore := swapStatus(func(string, string) (kservice.Status, error) {
 			return kservice.StatusRunning, nil
 		})
 		defer restore()
@@ -85,7 +89,10 @@ func TestServiceLifecycleCommands(t *testing.T) {
 
 func executeRoot(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	rootFlags = struct{ Home string }{}
+	rootFlags = struct {
+		Home   string
+		System bool
+	}{}
 
 	root := Root()
 	var stdout bytes.Buffer
@@ -96,31 +103,31 @@ func executeRoot(t *testing.T, args ...string) (string, error) {
 	return stdout.String(), err
 }
 
-func swapInstall(fn func(string) error) func() {
+func swapInstall(fn func(string, string) error) func() {
 	prev := serviceInstall
 	serviceInstall = fn
 	return func() { serviceInstall = prev }
 }
 
-func swapStart(fn func(string) error) func() {
+func swapStart(fn func(string, string) error) func() {
 	prev := serviceStart
 	serviceStart = fn
 	return func() { serviceStart = prev }
 }
 
-func swapStop(fn func(string) error) func() {
+func swapStop(fn func(string, string) error) func() {
 	prev := serviceStop
 	serviceStop = fn
 	return func() { serviceStop = prev }
 }
 
-func swapUninstall(fn func(string) error) func() {
+func swapUninstall(fn func(string, string) error) func() {
 	prev := serviceUninstall
 	serviceUninstall = fn
 	return func() { serviceUninstall = prev }
 }
 
-func swapStatus(fn func(string) (kservice.Status, error)) func() {
+func swapStatus(fn func(string, string) (kservice.Status, error)) func() {
 	prev := serviceStatus
 	serviceStatus = fn
 	return func() { serviceStatus = prev }

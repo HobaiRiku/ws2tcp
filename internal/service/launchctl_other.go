@@ -2,7 +2,7 @@
 
 package service
 
-func darwinBootout()                {}
-func darwinBootstrap() error        { return nil }
-func darwinKickstart() (bool, error) { return false, nil }
-func darwinKill() (bool, error)      { return false, nil }
+func darwinBootout(_ string)              {}
+func darwinBootstrap(_ string) error      { return nil }
+func darwinKickstart(_ string) (bool, error) { return false, nil }
+func darwinKill(_ string) (bool, error)      { return false, nil }

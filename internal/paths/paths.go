@@ -4,7 +4,7 @@
 // Resolution order (first hit wins):
 //  1. explicit override (the --home flag passed to the root cobra command)
 //  2. WS2TCP_HOME environment variable
-//  3. $HOME/.ws2tcp (or %USERPROFILE%\.ws2tcp on Windows)
+//  3. scope-based default: system scope → SystemHome(), user scope → $HOME/.ws2tcp
 package paths
 
 import (
@@ -12,11 +12,17 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 const (
 	defaultDirName = ".ws2tcp"
 	envHome        = "WS2TCP_HOME"
+
+	// ScopeSystem selects the system-wide service installation mode.
+	ScopeSystem = "system"
+	// ScopeUser selects the per-user service installation mode.
+	ScopeUser = "user"
 
 	subCerts = "certs"
 	subData  = "data"
@@ -24,6 +30,7 @@ const (
 
 	fileConfig = "config.yaml"
 	fileLog    = "ws2tcp.log" // lives under logs/
+	filePID    = "ws2tcp.pid" // single-instance lock
 
 	dirMode  os.FileMode = 0o700
 	fileMode os.FileMode = 0o600
@@ -36,8 +43,17 @@ type Paths struct {
 }
 
 // Resolve returns Paths honoring the precedence above. override may be empty.
+// The scope defaults to user (~/.ws2tcp) if not specified.
 func Resolve(override string) (Paths, error) {
-	home, err := pickHome(override)
+	return ResolveScope(override, ScopeUser)
+}
+
+// ResolveScope is like Resolve but uses scope to choose the default home
+// directory when no override or WS2TCP_HOME is provided.
+//   - ScopeSystem → SystemHome() (platform system data dir)
+//   - ScopeUser   → $HOME/.ws2tcp
+func ResolveScope(override, scope string) (Paths, error) {
+	home, err := pickHomeForScope(override, scope)
 	if err != nil {
 		return Paths{}, err
 	}
@@ -48,13 +64,17 @@ func Resolve(override string) (Paths, error) {
 	return Paths{Home: abs}, nil
 }
 
-func pickHome(override string) (string, error) {
+func pickHomeForScope(override, scope string) (string, error) {
 	if override != "" {
 		return override, nil
 	}
 	if env := os.Getenv(envHome); env != "" {
 		return env, nil
 	}
+	if scope == ScopeSystem {
+		return SystemHome(), nil
+	}
+	// user scope
 	h, err := os.UserHomeDir()
 	if err != nil || h == "" {
 		return "", errors.New("cannot determine user home; set WS2TCP_HOME or pass --home")
@@ -94,8 +114,27 @@ func (p Paths) Config() string { return filepath.Join(p.Home, fileConfig) }
 // LogFile returns the absolute path to logs/ws2tcp.log.
 func (p Paths) LogFile() string { return filepath.Join(p.Logs(), fileLog) }
 
+// PIDFile returns the absolute path to the single-instance lock file.
+func (p Paths) PIDFile() string { return filepath.Join(p.Home, filePID) }
+
 // FileMode is the canonical mode for files created under Home.
 func (p Paths) FileMode() os.FileMode { return fileMode }
+
+// SystemHome returns the platform-specific default data directory for a
+// system-scope (root-owned) ws2tcp installation.
+func SystemHome() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "/Library/Application Support/ws2tcp"
+	case "windows":
+		if pd := os.Getenv("ProgramData"); pd != "" {
+			return filepath.Join(pd, "ws2tcp")
+		}
+		return `C:\ProgramData\ws2tcp`
+	default: // linux and others
+		return "/var/lib/ws2tcp"
+	}
+}
 
 // ResolveRelative joins rel onto Home unless rel is already absolute.
 // Empty rel returns "" so callers can distinguish "unset" from "set to home".

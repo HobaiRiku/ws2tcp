@@ -16,7 +16,7 @@ func statusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show ws2tcp service status",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			status, err := serviceStatus(rootFlags.Home)
+			status, err := serviceStatus(rootFlags.Home, rootScope())
 			if err != nil {
 				return fmt.Errorf("get service status: %w", err)
 			}

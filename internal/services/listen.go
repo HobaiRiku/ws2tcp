@@ -3,9 +3,14 @@ package services
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
+	"path/filepath"
 	"strconv"
 	"strings"
+
+	"websocket2Tcp/internal/paths"
+	"websocket2Tcp/internal/pid"
 )
 
 // listenProbe is the function used to detect "port already used by another
@@ -88,9 +93,46 @@ func (r *Registry) validateTunnelListen(skipClient, skipTunnel, listen, currentL
 		return nil
 	}
 	if err := listenProbe(listen); err != nil {
+		warnPortConflict(listen)
 		return fmt.Errorf("listen %q is not bindable: %w", listen, err)
 	}
 	return nil
+}
+
+// warnPortConflict is a best-effort diagnostic: if the busy port appears to be
+// held by a known ws2tcp process, emit a structured Warn so the operator knows
+// which instance to stop. Failures are silently ignored.
+//
+// It is a package-level var so tests can stub it out.
+var warnPortConflict = defaultWarnPortConflict
+
+func defaultWarnPortConflict(addr string) {
+	_, portStr, err := net.SplitHostPort(addr)
+	if err != nil {
+		return
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return
+	}
+
+	ownerPID := pid.FindPortOwner(port)
+	homes := pid.KnownHomes(paths.SystemHome())
+
+	for _, home := range homes {
+		knownPID, err := pid.Read(filepath.Join(home, "ws2tcp.pid"))
+		if err != nil {
+			continue
+		}
+		// Attribution: either we matched the port to this PID directly, or
+		// on platforms without per-port lookup we fall back to checking if
+		// any ws2tcp instance is live (it may be the culprit).
+		if (ownerPID != 0 && knownPID == ownerPID) || (ownerPID == 0 && pid.IsAlive(knownPID)) {
+			slog.Default().Warn("port may conflict with running ws2tcp instance",
+				"addr", addr, "pid", knownPID, "home", home)
+			return
+		}
+	}
 }
 
 func probeBind(addr string) error {

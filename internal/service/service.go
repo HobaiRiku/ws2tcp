@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"runtime"
 	"sync"
 
 	kservice "github.com/kardianos/service"
@@ -15,6 +14,7 @@ import (
 	"websocket2Tcp/internal/config"
 	"websocket2Tcp/internal/log"
 	"websocket2Tcp/internal/paths"
+	"websocket2Tcp/internal/pid"
 )
 
 const (
@@ -22,6 +22,13 @@ const (
 	serviceDisplayName = "ws2tcp"
 	serviceDescription = "WebSocket-to-TCP tunnel daemon"
 )
+
+// DefaultScope returns the platform-appropriate service scope: user on macOS
+// (per-user launchd agent, avoids SIP friction), system everywhere else
+// (systemd system unit, Windows service).
+func DefaultScope() string {
+	return defaultScope()
+}
 
 // Program implements kardianos/service.Interface and delegates the real work
 // to app.Run after loading the configured WS2TCP_HOME tree.
@@ -47,11 +54,17 @@ func NewProgram(home string) *Program {
 }
 
 // New constructs a kardianos service wrapper around Program.
-func New(home string) (kservice.Service, *Program, error) {
-	p, resolved, err := newProgram(home)
+// scope must be paths.ScopeSystem or paths.ScopeUser (empty defaults to
+// DefaultScope). home follows the same semantics as --home / WS2TCP_HOME.
+func New(home, scope string) (kservice.Service, *Program, error) {
+	if scope == "" {
+		scope = DefaultScope()
+	}
+	resolved, err := paths.ResolveScope(home, scope)
 	if err != nil {
 		return nil, nil, err
 	}
+	p := NewProgram(resolved.Home)
 	cfg := &kservice.Config{
 		Name:             serviceName,
 		DisplayName:      serviceDisplayName,
@@ -62,9 +75,10 @@ func New(home string) (kservice.Service, *Program, error) {
 		},
 		Option: kservice.KeyValue{},
 	}
-	// macOS 用 per-user launchd agent（避免 system 域 SIP 限制 + launchctl bootstrap
-	// 行为差异）。Linux 用系统级 systemd unit，配 root 跑、开机自启更自然。
-	if runtime.GOOS == "darwin" {
+	// User scope → per-user service manager agent (launchd agent on macOS,
+	// systemd user unit on Linux, session service on Windows).
+	// System scope → system-level daemon; UserService stays false.
+	if scope == paths.ScopeUser {
 		cfg.Option["UserService"] = true
 	}
 	svc, err := kservice.New(p, cfg)
@@ -72,14 +86,6 @@ func New(home string) (kservice.Service, *Program, error) {
 		return nil, nil, err
 	}
 	return svc, p, nil
-}
-
-func newProgram(home string) (*Program, paths.Paths, error) {
-	resolved, err := paths.Resolve(home)
-	if err != nil {
-		return nil, paths.Paths{}, err
-	}
-	return NewProgram(resolved.Home), resolved, nil
 }
 
 // Interactive reports whether the current process is attached to a user
@@ -91,7 +97,7 @@ func Interactive() bool {
 // RunService enters kardianos/service managed mode. main() should call this
 // when Interactive() is false.
 func RunService(home string) error {
-	svc, _, err := New(home)
+	svc, _, err := New(home, DefaultScope())
 	if err != nil {
 		return err
 	}
@@ -99,37 +105,37 @@ func RunService(home string) error {
 }
 
 // Install registers the service with the OS service manager.
-func Install(home string) error {
-	svc, _, err := New(home)
+func Install(home, scope string) error {
+	svc, _, err := New(home, scope)
 	if err != nil {
 		return err
 	}
 	// Clear any stale launchd registration before writing the new plist;
 	// otherwise a previous (e.g. sudo) install can leave a cached entry that
 	// makes subsequent `launchctl load` fail with "Input/output error".
-	darwinBootout()
+	darwinBootout(scope)
 	if err := svc.Install(); err != nil {
 		return err
 	}
-	return darwinBootstrap()
+	return darwinBootstrap(scope)
 }
 
 // Uninstall removes the service registration from the OS service manager.
-func Uninstall(home string) error {
-	svc, _, err := New(home)
+func Uninstall(home, scope string) error {
+	svc, _, err := New(home, scope)
 	if err != nil {
 		return err
 	}
-	darwinBootout()
+	darwinBootout(scope)
 	return svc.Uninstall()
 }
 
 // Start requests the OS service manager to start the registered service.
-func Start(home string) error {
-	if started, err := darwinKickstart(); started {
+func Start(home, scope string) error {
+	if started, err := darwinKickstart(scope); started {
 		return err
 	}
-	svc, _, err := New(home)
+	svc, _, err := New(home, scope)
 	if err != nil {
 		return err
 	}
@@ -137,11 +143,11 @@ func Start(home string) error {
 }
 
 // Stop requests the OS service manager to stop the registered service.
-func Stop(home string) error {
-	if stopped, err := darwinKill(); stopped {
+func Stop(home, scope string) error {
+	if stopped, err := darwinKill(scope); stopped {
 		return err
 	}
-	svc, _, err := New(home)
+	svc, _, err := New(home, scope)
 	if err != nil {
 		return err
 	}
@@ -149,8 +155,8 @@ func Stop(home string) error {
 }
 
 // Status returns the current OS-managed service status.
-func Status(home string) (kservice.Status, error) {
-	svc, _, err := New(home)
+func Status(home, scope string) (kservice.Status, error) {
+	svc, _, err := New(home, scope)
 	if err != nil {
 		return kservice.StatusUnknown, err
 	}
@@ -237,6 +243,13 @@ func (p *Program) Start(_ kservice.Service) error {
 		return errors.New("service already started")
 	}
 
+	// Acquire the PID file so a concurrent `ws2tcp run` in the same home
+	// can detect the conflict immediately rather than at port bind time.
+	pidFile := pid.Path(p.home)
+	if err := pid.Acquire(pidFile); err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	p.cancel = cancel
@@ -253,6 +266,7 @@ func (p *Program) Start(_ kservice.Service) error {
 		defer p.mu.Unlock()
 		p.runErr = err
 		p.cancel = nil
+		pid.Release(pidFile)
 		close(done)
 	}()
 
