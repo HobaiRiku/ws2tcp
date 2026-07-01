@@ -1,12 +1,15 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	kservice "github.com/kardianos/service"
 
 	"websocket2Tcp/internal/paths"
 )
@@ -81,4 +84,19 @@ func darwinKill(scope string) (bool, error) {
 		return true, fmt.Errorf("launchctl kill: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return true, nil
+}
+
+func darwinStatus(scope string) (bool, kservice.Status, error) {
+	out, err := exec.Command("launchctl", "print", darwinServiceTarget(scope)).CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if strings.Contains(text, "Could not find service") {
+			return true, kservice.StatusUnknown, errors.New("the service is not installed")
+		}
+		return true, kservice.StatusUnknown, fmt.Errorf("launchctl print: %s: %w", text, err)
+	}
+	if strings.Contains(text, "state = running") {
+		return true, kservice.StatusRunning, nil
+	}
+	return true, kservice.StatusStopped, nil
 }
