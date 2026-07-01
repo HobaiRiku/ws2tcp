@@ -3,6 +3,7 @@ package paths
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -55,13 +56,36 @@ func TestEnsureTreeCreatesSubdirs(t *testing.T) {
 func TestResolveRelative(t *testing.T) {
 	p := Paths{Home: "/srv/ws2tcp"}
 	cases := map[string]string{
-		"":                "",
-		"certs/cert.pem":  "/srv/ws2tcp/certs/cert.pem",
-		"/etc/abs.pem":    "/etc/abs.pem",
+		"":               "",
+		"certs/cert.pem": "/srv/ws2tcp/certs/cert.pem",
+		"/etc/abs.pem":   "/etc/abs.pem",
 	}
 	for in, want := range cases {
 		if got := p.ResolveRelative(in); got != want {
 			t.Errorf("ResolveRelative(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+func TestHomeDirMode(t *testing.T) {
+	t.Run("user home stays private", func(t *testing.T) {
+		p := Paths{Home: filepath.Join(t.TempDir(), "ws2tcp-home")}
+		if got := p.homeDirMode(); got != 0o700 {
+			t.Fatalf("homeDirMode() = %o, want 0700", got)
+		}
+	})
+
+	t.Run("darwin system home is traversable", func(t *testing.T) {
+		p := Paths{Home: SystemHome()}
+		got := p.homeDirMode()
+		if runtime.GOOS == "darwin" {
+			if got != 0o755 {
+				t.Fatalf("homeDirMode() = %o, want 0755", got)
+			}
+			return
+		}
+		if got != 0o700 {
+			t.Fatalf("homeDirMode() = %o, want 0700", got)
+		}
+	})
 }
