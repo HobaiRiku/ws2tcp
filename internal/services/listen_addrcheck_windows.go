@@ -3,11 +3,11 @@
 package services
 
 import (
-	"syscall"
+	"golang.org/x/sys/windows"
 )
 
 // isAddrInUse reports whether err indicates that the requested address/port is
 // already bound by another process (WSAEADDRINUSE on Windows).
 func isAddrInUse(err error) bool {
-	return isErrno(err, syscall.WSAEADDRINUSE)
+	return isErrno(err, windows.WSAEADDRINUSE)
 }

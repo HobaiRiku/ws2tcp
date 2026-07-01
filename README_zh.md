@@ -104,6 +104,8 @@ make build               # 产物: build/bin/ws2tcp (含 Web UI)
 
 构建依赖：Go 1.23+、`pnpm` (或 `corepack enable`)，`make`。
 
+GitHub Actions 里的前端相关任务统一使用 Node 24 和 `pnpm@9.15.0`。
+
 ---
 
 ## 配置示例
@@ -275,6 +277,10 @@ make test-e2e        # in-process 端到端: 真起 server+client+tunnel, 经 ec
 make ui-typecheck    # 前端类型检查
 make ui-lint         # 前端 lint
 ```
+
+---
+
+GitHub Actions 会在每次 `push` / `pull_request` 时跑后端测试、前端检查和发布构建校验；其中前端相关 CI / release 任务固定使用 Node 24 + `pnpm@9.15.0`。推送 `v*` tag（例如 `v0.1.0`）后，会触发 GoReleaser：发布 GitHub Release、多平台产物，并把更新后的 Homebrew cask 提交到 tap 仓库。
 
 ---
 

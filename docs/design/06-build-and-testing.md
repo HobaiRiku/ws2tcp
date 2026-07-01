@@ -7,7 +7,9 @@ cover.
 ## Makefile
 
 Single source of truth for local development. CI invokes the same
-targets — no parallel scripts.
+targets — no parallel scripts. Frontend-related GitHub Actions jobs pin
+Node 24 together with `pnpm@9.15.0` so local and CI installs resolve
+the same lockfile consistently.
 
 ```make
 # ─── variables ────────────────────────────────────────────────────────
