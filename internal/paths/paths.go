@@ -35,10 +35,11 @@ const (
 	dirMode  os.FileMode = 0o700
 	fileMode os.FileMode = 0o600
 
-	// systemHomeDirMode keeps the system-scope root traversable by regular
-	// users while sensitive files remain locked down (0600) and child dirs
-	// stay private (0700).
-	systemHomeDirMode os.FileMode = 0o755
+	// macOS system-scope defaults should be manageable by local admin users.
+	// Keep access limited to owner+group while allowing group writes.
+	systemHomeDirMode os.FileMode = 0o770
+	systemTreeDirMode os.FileMode = 0o770
+	systemFileMode    os.FileMode = 0o660
 )
 
 // Paths holds the resolved absolute root and offers helpers for the
@@ -87,9 +88,9 @@ func pickHomeForScope(override, scope string) (string, error) {
 	return filepath.Join(h, defaultDirName), nil
 }
 
-// EnsureTree creates Home, certs/, data/, logs/ with mode 0700, idempotent.
-// Files inside (config.yaml, log file) are created lazily by their respective
-// writers with mode 0600.
+// EnsureTree creates Home, certs/, data/, logs/ with scope-aware modes,
+// idempotently. Files inside (config.yaml, log file) are created lazily by
+// their respective writers using FileMode().
 func (p Paths) EnsureTree() error {
 	if err := os.MkdirAll(p.Home, p.homeDirMode()); err != nil {
 		return fmt.Errorf("mkdir %s: %w", p.Home, err)
@@ -99,12 +100,12 @@ func (p Paths) EnsureTree() error {
 	}
 
 	for _, d := range []string{p.Certs(), p.Data(), p.Logs()} {
-		if err := os.MkdirAll(d, dirMode); err != nil {
+		if err := os.MkdirAll(d, p.treeDirMode()); err != nil {
 			return fmt.Errorf("mkdir %s: %w", d, err)
 		}
 		// Re-chmod even if MkdirAll did nothing, to repair permissions when
 		// a user restored the tree from an archive with looser modes.
-		if err := os.Chmod(d, dirMode); err != nil {
+		if err := os.Chmod(d, p.treeDirMode()); err != nil {
 			return fmt.Errorf("chmod %s: %w", d, err)
 		}
 	}
@@ -112,10 +113,28 @@ func (p Paths) EnsureTree() error {
 }
 
 func (p Paths) homeDirMode() os.FileMode {
-	if runtime.GOOS == "darwin" && filepath.Clean(p.Home) == filepath.Clean(SystemHome()) {
+	if p.isDarwinSystemHome() {
 		return systemHomeDirMode
 	}
 	return dirMode
+}
+
+func (p Paths) treeDirMode() os.FileMode {
+	if p.isDarwinSystemHome() {
+		return systemTreeDirMode
+	}
+	return dirMode
+}
+
+func (p Paths) fileMode() os.FileMode {
+	if p.isDarwinSystemHome() {
+		return systemFileMode
+	}
+	return fileMode
+}
+
+func (p Paths) isDarwinSystemHome() bool {
+	return runtime.GOOS == "darwin" && filepath.Clean(p.Home) == filepath.Clean(SystemHome())
 }
 
 // Certs is the directory for optional sslCert/sslKey used by native wss.
@@ -137,7 +156,7 @@ func (p Paths) LogFile() string { return filepath.Join(p.Logs(), fileLog) }
 func (p Paths) PIDFile() string { return filepath.Join(p.Home, filePID) }
 
 // FileMode is the canonical mode for files created under Home.
-func (p Paths) FileMode() os.FileMode { return fileMode }
+func (p Paths) FileMode() os.FileMode { return p.fileMode() }
 
 // SystemHome returns the platform-specific default data directory for a
 // system-scope (root-owned) ws2tcp installation.

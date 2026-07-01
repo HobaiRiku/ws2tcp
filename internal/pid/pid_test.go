@@ -4,8 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"testing"
+
+	"websocket2Tcp/internal/paths"
 )
 
 func TestWriteRead(t *testing.T) {
@@ -242,4 +245,27 @@ func TestKnownHomes_noDuplicates(t *testing.T) {
 			t.Fatalf("duplicate home %q in KnownHomes: %v", h, homes)
 		}
 	}
+}
+
+func TestPIDFileModes(t *testing.T) {
+	t.Run("default stays private", func(t *testing.T) {
+		dir := t.TempDir()
+		dm, fm := pidFileModes(filepath.Join(dir, "ws2tcp.pid"))
+		if dm != 0o700 || fm != 0o600 {
+			t.Fatalf("pidFileModes() = (%o,%o), want (0700,0600)", dm, fm)
+		}
+	})
+
+	t.Run("darwin system home allows admin group", func(t *testing.T) {
+		dm, fm := pidFileModes(filepath.Join(paths.SystemHome(), "ws2tcp.pid"))
+		if runtime.GOOS == "darwin" {
+			if dm != 0o770 || fm != 0o660 {
+				t.Fatalf("pidFileModes() = (%o,%o), want (0770,0660)", dm, fm)
+			}
+			return
+		}
+		if dm != 0o700 || fm != 0o600 {
+			t.Fatalf("pidFileModes() = (%o,%o), want (0700,0600)", dm, fm)
+		}
+	})
 }
