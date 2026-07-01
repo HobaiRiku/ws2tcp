@@ -200,6 +200,9 @@ func Stop(home, scope string) error {
 
 // Status returns the current OS-managed service status.
 func Status(home, scope string) (kservice.Status, error) {
+	if handled, status, err := darwinStatus(scope); handled {
+		return status, err
+	}
 	svc, _, err := New(home, scope)
 	if err != nil {
 		return kservice.StatusUnknown, err
