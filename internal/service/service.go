@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"sync"
 
 	kservice "github.com/kardianos/service"
@@ -122,8 +123,8 @@ func Install(home, scope string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := resolved.EnsureTree(); err != nil {
-		return "", fmt.Errorf("prepare home %s: %w", resolved.Home, err)
+	if err := ensureHomeAndConfig(resolved); err != nil {
+		return "", err
 	}
 	p := NewProgram(resolved.Home)
 	cfg := &kservice.Config{
@@ -243,24 +244,13 @@ func loadOptions(home string, console bool) (app.Options, io.Closer, error) {
 	if err != nil {
 		return app.Options{}, nil, err
 	}
-	if err := p.EnsureTree(); err != nil {
-		return app.Options{}, nil, fmt.Errorf("prepare home %s: %w", p.Home, err)
+	if err := ensureHomeAndConfig(p); err != nil {
+		return app.Options{}, nil, err
 	}
 
 	cfg, err := config.Load(p.Config())
 	if err != nil {
-		var miss *config.MissingFileError
-		if errors.As(err, &miss) {
-			if err := config.WriteExample(p.Config(), p.FileMode()); err != nil {
-				return app.Options{}, nil, fmt.Errorf("init config at %s: %w", miss.Path, err)
-			}
-			cfg, err = config.Load(p.Config())
-			if err != nil {
-				return app.Options{}, nil, fmt.Errorf("load initialized config: %w", err)
-			}
-		} else {
-			return app.Options{}, nil, err
-		}
+		return app.Options{}, nil, err
 	}
 
 	logger, tap, closer, err := log.Init(log.Options{
@@ -282,6 +272,21 @@ func loadOptions(home string, console bool) (app.Options, io.Closer, error) {
 		Logger: logger,
 		LogTap: tap,
 	}, closer, nil
+}
+
+func ensureHomeAndConfig(p paths.Paths) error {
+	if err := p.EnsureTree(); err != nil {
+		return fmt.Errorf("prepare home %s: %w", p.Home, err)
+	}
+	if _, err := os.Stat(p.Config()); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("stat config %s: %w", p.Config(), err)
+	}
+	if err := config.WriteExample(p.Config(), p.FileMode()); err != nil {
+		return fmt.Errorf("init config at %s: %w", p.Config(), err)
+	}
+	return nil
 }
 
 // Start launches the daemon asynchronously as required by kardianos/service.
