@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 
@@ -17,6 +18,9 @@ func stopCmd() *cobra.Command {
 		Short: "Stop the installed ws2tcp service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope := rootScope()
+			if err := ensurePrivilege(scope, os.Args[1:]); err != nil {
+				return err
+			}
 			p, err := paths.ResolveScope(rootFlags.Home, scope)
 			if err != nil {
 				return err
