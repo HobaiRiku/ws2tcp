@@ -13,8 +13,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+
+	"websocket2Tcp/internal/paths"
 )
 
 // ErrAlreadyRunning is returned by Acquire when a live ws2tcp process is
@@ -47,11 +50,12 @@ func Path(home string) string {
 // but belongs to a dead process it is removed once and the creation is
 // retried, giving the surviving caller the lock.
 func Acquire(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dirPerm, filePerm := pidFileModes(path)
+	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return fmt.Errorf("create pid dir: %w", err)
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
 	if err != nil {
 		if !os.IsExist(err) {
 			return fmt.Errorf("acquire pid lock: %w", err)
@@ -68,7 +72,7 @@ func Acquire(path string) error {
 		// Stale entry: remove and try once more with O_EXCL so that a
 		// concurrent starter that also detected the stale file loses the race.
 		_ = os.Remove(path)
-		f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
 		if err != nil {
 			return fmt.Errorf("acquire pid lock after stale removal: %w", err)
 		}
@@ -85,14 +89,15 @@ func Release(path string) {
 	Remove(path)
 }
 
-// Write atomically writes pid to path with mode 0600. Parent directories are
-// created (mode 0700) if they do not exist.
+// Write atomically writes pid to path with ws2tcp's platform/scoped mode.
+// Parent directories are created if they do not exist.
 func Write(path string, pid int) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	dirPerm, filePerm := pidFileModes(path)
+	if err := os.MkdirAll(filepath.Dir(path), dirPerm); err != nil {
 		return fmt.Errorf("create pid dir: %w", err)
 	}
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(strconv.Itoa(pid)+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(tmp, []byte(strconv.Itoa(pid)+"\n"), filePerm); err != nil {
 		return fmt.Errorf("write pid: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
@@ -100,6 +105,13 @@ func Write(path string, pid int) error {
 		return fmt.Errorf("install pid file: %w", err)
 	}
 	return nil
+}
+
+func pidFileModes(path string) (os.FileMode, os.FileMode) {
+	if runtime.GOOS == "darwin" && filepath.Clean(filepath.Dir(path)) == filepath.Clean(paths.SystemHome()) {
+		return 0o770, 0o660
+	}
+	return 0o700, 0o600
 }
 
 // Read parses the integer PID from path.

@@ -279,6 +279,9 @@ func ensureHomeAndConfig(p paths.Paths) error {
 		return fmt.Errorf("prepare home %s: %w", p.Home, err)
 	}
 	if _, err := os.Stat(p.Config()); err == nil {
+		if err := os.Chmod(p.Config(), p.FileMode()); err != nil {
+			return fmt.Errorf("chmod config %s: %w", p.Config(), err)
+		}
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("stat config %s: %w", p.Config(), err)

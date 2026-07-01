@@ -79,13 +79,36 @@ func TestHomeDirMode(t *testing.T) {
 		p := Paths{Home: SystemHome()}
 		got := p.homeDirMode()
 		if runtime.GOOS == "darwin" {
-			if got != 0o755 {
-				t.Fatalf("homeDirMode() = %o, want 0755", got)
+			if got != 0o770 {
+				t.Fatalf("homeDirMode() = %o, want 0770", got)
 			}
 			return
 		}
 		if got != 0o700 {
 			t.Fatalf("homeDirMode() = %o, want 0700", got)
+		}
+	})
+}
+
+func TestFileMode(t *testing.T) {
+	t.Run("user home file mode is private", func(t *testing.T) {
+		p := Paths{Home: filepath.Join(t.TempDir(), "ws2tcp-home")}
+		if got := p.FileMode(); got != 0o600 {
+			t.Fatalf("FileMode() = %o, want 0600", got)
+		}
+	})
+
+	t.Run("darwin system home file mode allows admin group", func(t *testing.T) {
+		p := Paths{Home: SystemHome()}
+		got := p.FileMode()
+		if runtime.GOOS == "darwin" {
+			if got != 0o660 {
+				t.Fatalf("FileMode() = %o, want 0660", got)
+			}
+			return
+		}
+		if got != 0o600 {
+			t.Fatalf("FileMode() = %o, want 0600", got)
 		}
 	})
 }
