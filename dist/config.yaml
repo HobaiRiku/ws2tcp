@@ -1,0 +1,221 @@
+version: 2
+project_name: ws2tcp
+release:
+  github:
+    owner: HobaiRiku
+    name: ws2tcp
+  prerelease: auto
+  name_template: '{{ .ProjectName }} {{ .Version }}'
+homebrew_casks:
+  - name: ws2tcp
+    repository:
+      owner: HobaiRiku
+      name: homebrew-tap
+      token: '{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}'
+      branch: main
+    commit_author:
+      name: github-actions[bot]
+      email: 41898282+github-actions[bot]@users.noreply.github.com
+    commit_msg_template: 'brew: update ws2tcp cask to {{ .Tag }}'
+    directory: Casks
+    description: WebSocket tunnel for transparent TCP forwarding with end-to-end encryption.
+    homepage: https://github.com/HobaiRiku/ws2tcp
+    ids:
+      - bundled
+    binaries:
+      - ws2tcp
+    url:
+      verified: github.com/HobaiRiku/ws2tcp/
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ws2tcp"]
+          end
+builds:
+  - id: core
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goamd64:
+      - v1
+    go386:
+      - sse2
+    goarm:
+      - "6"
+    goarm64:
+      - v8.0
+    gomips:
+      - hardfloat
+    goppc64:
+      - power8
+    goriscv64:
+      - rva20u64
+    targets:
+      - linux_amd64_v1
+      - linux_arm64_v8.0
+      - darwin_amd64_v1
+      - darwin_arm64_v8.0
+      - windows_amd64_v1
+      - windows_arm64_v8.0
+    dir: .
+    main: .
+    binary: ws2tcp
+    builder: go
+    tool: go
+    command: build
+    ldflags:
+      - -s -w
+      - -X websocket2Tcp/internal/version.Version={{ .Version }}
+      - -X websocket2Tcp/internal/version.Commit={{ .Commit }}
+      - -X websocket2Tcp/internal/version.BuildDate={{ .Date }}
+    tags:
+      - embedui
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+  - id: linux-armv7
+    goos:
+      - linux
+    goarch:
+      - arm
+    goamd64:
+      - v1
+    go386:
+      - sse2
+    goarm:
+      - "7"
+    goarm64:
+      - v8.0
+    gomips:
+      - hardfloat
+    goppc64:
+      - power8
+    goriscv64:
+      - rva20u64
+    targets:
+      - linux_arm_7
+    dir: .
+    main: .
+    binary: ws2tcp
+    builder: go
+    tool: go
+    command: build
+    ldflags:
+      - -s -w
+      - -X websocket2Tcp/internal/version.Version={{ .Version }}
+      - -X websocket2Tcp/internal/version.Commit={{ .Commit }}
+      - -X websocket2Tcp/internal/version.BuildDate={{ .Date }}
+    tags:
+      - embedui
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+archives:
+  - id: bundled
+    ids:
+      - core
+      - linux-armv7
+    builds_info:
+      mode: 493
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ if and (eq .Os "linux") (eq .Arch "arm") }}armv7{{ else }}{{ .Arch }}{{ end }}'
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - src: LICENSE
+      - src: README.md
+snapshot:
+  version_template: '{{ .Version }}-next'
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+docker_digest:
+  name_template: digests.txt
+changelog:
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^tests:'
+      - '^chore:'
+      - '^ci:'
+  sort: asc
+  format: '{{ .SHA }} {{ .Message }}'
+dist: dist
+env_files:
+  github_token: ~/.config/goreleaser/github_token
+  gitlab_token: ~/.config/goreleaser/gitlab_token
+  gitea_token: ~/.config/goreleaser/gitea_token
+before:
+  hooks:
+    - go mod download
+    - pnpm --dir ui install --frozen-lockfile
+    - pnpm --dir ui run build
+source:
+  name_template: '{{ .ProjectName }}-{{ .Version }}'
+  format: tar.gz
+gomod:
+  gobinary: go
+announce:
+  twitter:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+  mastodon:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+    server: ""
+  reddit:
+    title_template: '{{ .ProjectName }} {{ .Tag }} is out!'
+    url_template: '{{ .ReleaseURL }}'
+  slack:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+    username: GoReleaser
+  discord:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+    author: GoReleaser
+    color: "3888754"
+    icon_url: https://goreleaser.com/static/avatar.png
+  teams:
+    title_template: '{{ .ProjectName }} {{ .Tag }} is out!'
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+    color: '#2D313E'
+    icon_url: https://goreleaser.com/static/avatar.png
+  smtp:
+    subject_template: '{{ .ProjectName }} {{ .Tag }} is out!'
+    body_template: 'You can view details from: {{ .ReleaseURL }}'
+  mattermost:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+    title_template: '{{ .ProjectName }} {{ .Tag }} is out!'
+    username: GoReleaser
+  linkedin:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+  telegram:
+    message_template: '{{ mdv2escape .ProjectName }} {{ mdv2escape .Tag }} is out{{ mdv2escape "!" }} Check it out at {{ mdv2escape .ReleaseURL }}'
+    parse_mode: MarkdownV2
+  webhook:
+    message_template: '{ "message": "{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}"}'
+    content_type: application/json; charset=utf-8
+    expected_status_codes:
+      - 200
+      - 201
+      - 202
+      - 204
+  opencollective:
+    title_template: '{{ .Tag }}'
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out!<br/>Check it out at <a href="{{ .ReleaseURL }}">{{ .ReleaseURL }}</a>'
+  bluesky:
+    message_template: '{{ .ProjectName }} {{ .Tag }} is out! Check it out at {{ .ReleaseURL }}'
+git:
+  tag_sort: -version:refname
+github_urls:
+  download: https://github.com
+gitlab_urls:
+  download: https://gitlab.com
