@@ -34,6 +34,11 @@ const (
 
 	dirMode  os.FileMode = 0o700
 	fileMode os.FileMode = 0o600
+
+	// systemHomeDirMode keeps the system-scope root traversable by regular
+	// users while sensitive files remain locked down (0600) and child dirs
+	// stay private (0700).
+	systemHomeDirMode os.FileMode = 0o755
 )
 
 // Paths holds the resolved absolute root and offers helpers for the
@@ -86,7 +91,14 @@ func pickHomeForScope(override, scope string) (string, error) {
 // Files inside (config.yaml, log file) are created lazily by their respective
 // writers with mode 0600.
 func (p Paths) EnsureTree() error {
-	for _, d := range []string{p.Home, p.Certs(), p.Data(), p.Logs()} {
+	if err := os.MkdirAll(p.Home, p.homeDirMode()); err != nil {
+		return fmt.Errorf("mkdir %s: %w", p.Home, err)
+	}
+	if err := os.Chmod(p.Home, p.homeDirMode()); err != nil {
+		return fmt.Errorf("chmod %s: %w", p.Home, err)
+	}
+
+	for _, d := range []string{p.Certs(), p.Data(), p.Logs()} {
 		if err := os.MkdirAll(d, dirMode); err != nil {
 			return fmt.Errorf("mkdir %s: %w", d, err)
 		}
@@ -97,6 +109,13 @@ func (p Paths) EnsureTree() error {
 		}
 	}
 	return nil
+}
+
+func (p Paths) homeDirMode() os.FileMode {
+	if runtime.GOOS == "darwin" && filepath.Clean(p.Home) == filepath.Clean(SystemHome()) {
+		return systemHomeDirMode
+	}
+	return dirMode
 }
 
 // Certs is the directory for optional sslCert/sslKey used by native wss.
