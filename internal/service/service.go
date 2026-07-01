@@ -122,6 +122,9 @@ func Install(home, scope string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := resolved.EnsureTree(); err != nil {
+		return "", fmt.Errorf("prepare home %s: %w", resolved.Home, err)
+	}
 	p := NewProgram(resolved.Home)
 	cfg := &kservice.Config{
 		Name:             serviceName,
