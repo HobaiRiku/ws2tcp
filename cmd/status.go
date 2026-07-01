@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	kservice "github.com/kardianos/service"
 	"github.com/spf13/cobra"
@@ -18,6 +19,9 @@ func statusCmd() *cobra.Command {
 		Short: "Show ws2tcp service status",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope := rootScope()
+			if err := ensurePrivilege(scope, os.Args[1:]); err != nil {
+				return err
+			}
 			p, err := paths.ResolveScope(rootFlags.Home, scope)
 			if err != nil {
 				return err

@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"websocket2Tcp/internal/paths"
-	"websocket2Tcp/internal/privilege"
 	hostservice "websocket2Tcp/internal/service"
 )
 
@@ -19,7 +18,7 @@ func uninstallCmd() *cobra.Command {
 		Short: "Uninstall the ws2tcp OS service",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			scope := rootScope()
-			if err := privilege.EnsurePrivilege(scope, os.Args[1:]); err != nil {
+			if err := ensurePrivilege(scope, os.Args[1:]); err != nil {
 				return err
 			}
 			p, err := paths.ResolveScope(rootFlags.Home, scope)

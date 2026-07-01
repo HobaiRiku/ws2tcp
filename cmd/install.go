@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"websocket2Tcp/internal/paths"
-	"websocket2Tcp/internal/privilege"
 	hostservice "websocket2Tcp/internal/service"
 )
 
@@ -21,7 +20,7 @@ func installCmd() *cobra.Command {
 			scope := rootScope()
 			// System-scope install requires root; re-exec under sudo on Unix
 			// or print an instructional error on Windows.
-			if err := privilege.EnsurePrivilege(scope, os.Args[1:]); err != nil {
+			if err := ensurePrivilege(scope, os.Args[1:]); err != nil {
 				return err
 			}
 			p, err := paths.ResolveScope(rootFlags.Home, scope)

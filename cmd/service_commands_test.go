@@ -9,6 +9,9 @@ import (
 )
 
 func TestServiceLifecycleCommands(t *testing.T) {
+	restorePrivilege := swapEnsurePrivilege(func(string, []string) error { return nil })
+	defer restorePrivilege()
+
 	t.Run("install uses root home and scope", func(t *testing.T) {
 		var gotHome, gotScope string
 		restore := swapInstall(func(home, scope string) (string, error) {
@@ -131,4 +134,10 @@ func swapStatus(fn func(string, string) (kservice.Status, error)) func() {
 	prev := serviceStatus
 	serviceStatus = fn
 	return func() { serviceStatus = prev }
+}
+
+func swapEnsurePrivilege(fn func(string, []string) error) func() {
+	prev := ensurePrivilege
+	ensurePrivilege = fn
+	return func() { ensurePrivilege = prev }
 }
