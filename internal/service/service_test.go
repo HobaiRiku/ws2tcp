@@ -8,6 +8,9 @@ import (
 	"time"
 
 	kservice "github.com/kardianos/service"
+
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/paths"
 )
 
 func TestProgramStartStopLifecycle(t *testing.T) {
@@ -102,5 +105,22 @@ func TestLoadOptionsInitializesMissingConfig(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "config.yaml")); err != nil {
 		t.Fatalf("expected initialized config file: %v", err)
+	}
+}
+
+func TestEnsureHomeAndConfigCreatesExample(t *testing.T) {
+	home := t.TempDir()
+	p := paths.Paths{Home: home}
+
+	if err := ensureHomeAndConfig(p); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.App.HTTPToken == "" {
+		t.Fatal("expected initialized http_token")
 	}
 }
