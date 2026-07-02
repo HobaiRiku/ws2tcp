@@ -93,27 +93,28 @@ async function copyAll() {
 
 <style scoped>
 /* --- top-bar chip --- */
+/* Match the sibling .badge metrics exactly (padding / font-size / no border)
+   so the chip lines up with the "connected" badge next to it. */
 .ctx-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.28rem 0.7rem;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
   border-radius: 999px;
-  border: 1px solid transparent;
+  border: none;
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.05s ease;
 }
 
 .ctx-chip-dot {
-  width: 0.45rem;
-  height: 0.45rem;
+  width: 0.4rem;
+  height: 0.4rem;
   border-radius: 50%;
   background: currentColor;
-  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
 }
 
 .ctx-chip.is-system {
@@ -127,7 +128,7 @@ async function copyAll() {
 }
 
 .ctx-chip:hover {
-  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 45%, transparent);
 }
 
 .ctx-chip:active {
