@@ -69,9 +69,11 @@ async function manualRetry() {
   max-width: 480px;
   width: 100%;
   padding: 32px;
-  background: var(--card-bg, #fff);
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow);
 }
 .page-kicker {
   font-size: 12px;
