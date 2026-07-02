@@ -6,7 +6,12 @@ Resolution order (first hit wins):
 
 1. `--home <path>` flag on the root cobra command
 2. `WS2TCP_HOME` environment variable
-3. `$HOME/.ws2tcp` (Linux/macOS) or `%USERPROFILE%\.ws2tcp` (Windows)
+3. scope-based default:
+   - **system scope** (the default on every platform): the platform system
+     data dir — `/var/lib/ws2tcp` (Linux), `/Library/Application Support/ws2tcp`
+     (macOS), `%ProgramData%\ws2tcp` (Windows)
+   - **user scope** (opt-in via `--user`, not available on Windows):
+     `$HOME/.ws2tcp`
 
 We deliberately do **not** use `xdg.ConfigHome` / `xdg.DataHome` as the
 primary location. The project's design point is "one human-editable

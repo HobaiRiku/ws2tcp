@@ -44,6 +44,20 @@ export default {
     loadingVersion: 'Loading version…',
     footerTagline: 'WebSocket → TCP tunnel manager'
   },
+  context: {
+    subtitle: 'The runtime instance this console is managing',
+    viewDetails: 'View instance details',
+    title: 'Instance context',
+    rowScope: 'Scope',
+    rowHome: 'Home',
+    rowConfig: 'Config',
+    rowLog: 'Log file',
+    rowPlatform: 'Platform',
+    rowPid: 'PID',
+    rowUptime: 'Uptime',
+    rowVersion: 'Version',
+    copyAll: 'Copy all'
+  },
   toast: {
     networkError: 'Network error',
     copied: 'Copied to clipboard',

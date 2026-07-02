@@ -137,6 +137,18 @@ func (p Paths) isDarwinSystemHome() bool {
 	return runtime.GOOS == "darwin" && filepath.Clean(p.Home) == filepath.Clean(SystemHome())
 }
 
+// Scope classifies the resolved Home as ScopeSystem (matches the platform
+// system-wide default, e.g. /var/lib/ws2tcp) or ScopeUser. It is a
+// best-effort signal for surfaces that only have the resolved home (the
+// running daemon, the management API) and not the original --system/--home
+// flags; a custom --home that is neither default reports ScopeUser.
+func (p Paths) Scope() string {
+	if filepath.Clean(p.Home) == filepath.Clean(SystemHome()) {
+		return ScopeSystem
+	}
+	return ScopeUser
+}
+
 // Certs is the directory for optional sslCert/sslKey used by native wss.
 func (p Paths) Certs() string { return filepath.Join(p.Home, subCerts) }
 
