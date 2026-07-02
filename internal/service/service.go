@@ -24,11 +24,12 @@ const (
 	serviceDescription = "WebSocket-to-TCP tunnel daemon"
 )
 
-// DefaultScope returns the platform-appropriate service scope: user on macOS
-// (per-user launchd agent, avoids SIP friction), system everywhere else
-// (systemd system unit, Windows service).
+// DefaultScope returns the default service scope. ws2tcp manages a
+// system-wide service by default on every platform (systemd system unit,
+// launchd system daemon, Windows service); per-user scope is opt-in via the
+// --user flag and is not offered on Windows.
 func DefaultScope() string {
-	return defaultScope()
+	return paths.ScopeSystem
 }
 
 // Program implements kardianos/service.Interface and delegates the real work

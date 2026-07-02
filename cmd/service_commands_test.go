@@ -21,7 +21,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		})
 		defer restore()
 
-		out, err := executeRoot(t, "--system", "--home", "/tmp/ws2tcp-home", "install")
+		out, err := executeRoot(t, "--home", "/tmp/ws2tcp-home", "install")
 		if err != nil {
 			t.Fatalf("install returned error: %v", err)
 		}
@@ -42,7 +42,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		})
 		defer restore()
 
-		_, err := executeRoot(t, "--system", "--home", "/tmp/ws2tcp-home", "start")
+		_, err := executeRoot(t, "--home", "/tmp/ws2tcp-home", "start")
 		if err == nil || err.Error() != "start service scope=system home=/tmp/ws2tcp-home: boom" {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -52,7 +52,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		restore := swapStop(func(string, string) error { return nil })
 		defer restore()
 
-		out, err := executeRoot(t, "--system", "--home", "/tmp/ws2tcp-home", "stop")
+		out, err := executeRoot(t, "--home", "/tmp/ws2tcp-home", "stop")
 		if err != nil {
 			t.Fatalf("stop returned error: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		restore := swapUninstall(func(string, string) error { return nil })
 		defer restore()
 
-		out, err := executeRoot(t, "--system", "--home", "/tmp/ws2tcp-home", "uninstall")
+		out, err := executeRoot(t, "--home", "/tmp/ws2tcp-home", "uninstall")
 		if err != nil {
 			t.Fatalf("uninstall returned error: %v", err)
 		}
@@ -80,11 +80,26 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		})
 		defer restore()
 
-		out, err := executeRoot(t, "--system", "--home", "/tmp/ws2tcp-home", "status")
+		out, err := executeRoot(t, "--home", "/tmp/ws2tcp-home", "status")
 		if err != nil {
 			t.Fatalf("status returned error: %v", err)
 		}
 		if out != "scope: system\nhome: /tmp/ws2tcp-home\nstatus: running\n" {
+			t.Fatalf("unexpected output %q", out)
+		}
+	})
+
+	t.Run("--user selects user scope", func(t *testing.T) {
+		restore := swapStatus(func(string, string) (kservice.Status, error) {
+			return kservice.StatusStopped, nil
+		})
+		defer restore()
+
+		out, err := executeRoot(t, "--user", "--home", "/tmp/ws2tcp-home", "status")
+		if err != nil {
+			t.Fatalf("status returned error: %v", err)
+		}
+		if out != "scope: user\nhome: /tmp/ws2tcp-home\nstatus: stopped\n" {
 			t.Fatalf("unexpected output %q", out)
 		}
 	})
@@ -93,8 +108,8 @@ func TestServiceLifecycleCommands(t *testing.T) {
 func executeRoot(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 	rootFlags = struct {
-		Home   string
-		System bool
+		Home string
+		User bool
 	}{}
 
 	root := Root()
