@@ -12,6 +12,20 @@ export type AuthStatus = {
   auth_required: boolean
 }
 
+// 运行时上下文: 后端 /api/context 回显当前实例是 system 还是 user 层、
+// 对应的 WS2TCP_HOME、config 路径等, 供 UI 顶栏显示"我连的是哪个实例"。
+export type SystemContext = {
+  scope: 'system' | 'user'
+  home: string
+  config_path: string
+  log_file: string
+  os: string
+  arch: string
+  pid: number
+  uptime_seconds: number
+  version: VersionInfo
+}
+
 export type ACLRule = {
   cidr: string
   ports: string[]

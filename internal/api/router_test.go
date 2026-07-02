@@ -59,6 +59,37 @@ func TestHealthVersionAndConfigEndpoints(t *testing.T) {
 	}
 }
 
+func TestContextEndpointReportsScopeAndHome(t *testing.T) {
+	router, p, token, _, _ := newTestRouter(t, true)
+
+	rr := performJSON(t, router, http.MethodGet, "/api/context", "", nil)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized context response, got: %d %s", rr.Code, rr.Body.String())
+	}
+
+	rr = performJSON(t, router, http.MethodGet, "/api/context", token, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("unexpected context response: %d %s", rr.Code, rr.Body.String())
+	}
+	var got contextResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode context: %v", err)
+	}
+	// TempDir-based home is never the platform system default → user scope.
+	if got.Scope != paths.ScopeUser {
+		t.Fatalf("expected user scope, got %q", got.Scope)
+	}
+	if got.Home != p.Home {
+		t.Fatalf("expected home %q, got %q", p.Home, got.Home)
+	}
+	if got.ConfigPath != p.Config() {
+		t.Fatalf("expected config path %q, got %q", p.Config(), got.ConfigPath)
+	}
+	if got.PID == 0 || got.OS == "" || got.Version.Version == "" {
+		t.Fatalf("expected populated runtime details, got %+v", got)
+	}
+}
+
 func TestAuthEndpointsUseConfiguredToken(t *testing.T) {
 	router, _, token, _, _ := newTestRouter(t, true)
 
@@ -454,6 +485,8 @@ client:
 		Events:      bus,
 		LogFile:     p.LogFile(),
 		RequireAuth: requireAuth,
+		Scope:       p.Scope(),
+		Home:        p.Home,
 	}), p, testHTTPToken, bus, runtime
 }
 

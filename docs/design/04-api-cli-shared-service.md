@@ -102,6 +102,7 @@ factor over chi.
 ```
 GET    /api/health                       no auth
 GET    /api/version                      no auth
+GET    /api/context                       resolved scope/home + runtime info
 
 # Server identities + ACL
 GET    /api/server/clients

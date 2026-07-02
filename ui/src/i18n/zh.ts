@@ -44,6 +44,21 @@ export default {
     loadingVersion: '正在加载版本…',
     footerTagline: 'WebSocket → TCP 隧道管理'
   },
+  context: {
+    scopeSystem: '系统层',
+    scopeUser: '用户层',
+    viewDetails: '查看实例详情',
+    title: '实例上下文',
+    rowScope: '层级',
+    rowHome: '主目录',
+    rowConfig: '配置文件',
+    rowLog: '日志文件',
+    rowPlatform: '平台',
+    rowPid: '进程 PID',
+    rowUptime: '运行时长',
+    rowVersion: '版本',
+    copyAll: '复制全部'
+  },
   toast: {
     networkError: '网络错误',
     copied: '已复制到剪贴板',

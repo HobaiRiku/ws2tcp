@@ -2,15 +2,18 @@
 import { useAuthStore } from '@/stores/auth'
 import { useRuntimeStore } from '@/stores/runtime'
 import { useVersionStore } from '@/stores/version'
+import { useContextStore } from '@/stores/context'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { currentLocale, localeOptions, setLocale, type LocaleKey } from '@/i18n'
 import IconBtn from '@/components/IconBtn.vue'
+import ContextBadge from '@/components/ContextBadge.vue'
 
 const auth = useAuthStore()
 const runtime = useRuntimeStore()
 const ver = useVersionStore()
+const ctx = useContextStore()
 const router = useRouter()
 const { t } = useI18n()
 
@@ -22,7 +25,7 @@ const tabs = [
 ]
 
 onMounted(async () => {
-  await Promise.all([ver.load(), runtime.refresh()])
+  await Promise.all([ver.load(), ctx.load(), runtime.refresh()])
   runtime.connect()
 })
 
@@ -54,6 +57,7 @@ function switchLocale(event: Event) {
         </router-link>
       </nav>
       <div class="shell-meta">
+        <ContextBadge />
         <span class="badge nowrap" :class="runtime.connected ? 'badge-ok' : 'badge-warn'">
           {{ runtime.connected ? t('shell.streamConnected') : t('shell.streamReconnecting') }}
         </span>

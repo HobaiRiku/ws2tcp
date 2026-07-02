@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -37,6 +39,12 @@ type Options struct {
 	RequireAuth   bool
 	Logger        *slog.Logger
 	ServerControl ServerControl
+	// Scope / Home describe the resolved runtime context (system vs user
+	// install and its WS2TCP_HOME) so the web UI can show which instance it
+	// is talking to. Both are best-effort: the daemon only knows its home,
+	// not the original --system/--home flags.
+	Scope string
+	Home  string
 }
 
 type errorResponse struct {
@@ -116,6 +124,21 @@ type clientRuntimeResponse struct {
 	Tunnels []services.TunnelStatus `json:"tunnels"`
 }
 
+// contextResponse is the "which instance am I" payload behind /api/context.
+// It mirrors the CLI `status` output (scope + home) plus the surrounding
+// runtime details operators want to copy when reporting an issue.
+type contextResponse struct {
+	Scope         string       `json:"scope"`
+	Home          string       `json:"home"`
+	ConfigPath    string       `json:"config_path"`
+	LogFile       string       `json:"log_file"`
+	OS            string       `json:"os"`
+	Arch          string       `json:"arch"`
+	PID           int          `json:"pid"`
+	UptimeSeconds int64        `json:"uptime_seconds"`
+	Version       version.Info `json:"version"`
+}
+
 // NewRouter builds the base management REST API.
 func NewRouter(opts Options) *gin.Engine {
 	if opts.Logger == nil {
@@ -158,6 +181,19 @@ func NewRouter(opts Options) *gin.Engine {
 	serverWrite := authorize(opts, services.TokenScopeServerWrite)
 	adminOnly := authorize(opts, services.TokenScopeAdmin)
 
+	api.GET("/context", readOnly, func(c *gin.Context) {
+		c.JSON(http.StatusOK, contextResponse{
+			Scope:         opts.Scope,
+			Home:          opts.Home,
+			ConfigPath:    opts.Registry.ConfigPath(),
+			LogFile:       opts.LogFile,
+			OS:            runtime.GOOS,
+			Arch:          runtime.GOARCH,
+			PID:           os.Getpid(),
+			UptimeSeconds: int64(services.Uptime() / time.Second),
+			Version:       version.Current(),
+		})
+	})
 	api.GET("/config/path", readOnly, func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"path": opts.Registry.ConfigPath()})
 	})
