@@ -45,8 +45,7 @@ export default {
     footerTagline: 'WebSocket → TCP 隧道管理'
   },
   context: {
-    scopeSystem: '系统层',
-    scopeUser: '用户层',
+    subtitle: '当前控制台管理的运行实例',
     viewDetails: '查看实例详情',
     title: '实例上下文',
     rowScope: '层级',

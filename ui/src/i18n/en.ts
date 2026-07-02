@@ -45,8 +45,7 @@ export default {
     footerTagline: 'WebSocket → TCP tunnel manager'
   },
   context: {
-    scopeSystem: 'SYSTEM',
-    scopeUser: 'USER',
+    subtitle: 'The runtime instance this console is managing',
     viewDetails: 'View instance details',
     title: 'Instance context',
     rowScope: 'Scope',

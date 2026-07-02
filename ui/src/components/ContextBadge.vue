@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Modal from '@/components/Modal.vue'
-import IconBtn from '@/components/IconBtn.vue'
 import { useContextStore } from '@/stores/context'
 import { useToast } from '@/composables/useToast'
 import { writeClipboardText } from '@/utils/clipboard'
@@ -14,20 +13,14 @@ const { t } = useI18n()
 
 const open = ref(false)
 
-const scopeLabel = computed(() => {
-  const scope = ctx.info?.scope
-  if (!scope) return ''
-  return scope === 'system' ? t('context.scopeSystem') : t('context.scopeUser')
-})
-
-// system 层用 warn 色提醒"这是全局实例, 改动影响所有用户"; user 层用中性色.
-const badgeClass = computed(() => (ctx.info?.scope === 'system' ? 'badge-warn' : 'badge-neutral'))
+// 标志始终用英文 scope 字面量 (SYSTEM / USER), 不随语言切换.
+const scopeText = computed(() => (ctx.info?.scope ?? '').toUpperCase())
+const isSystem = computed(() => ctx.info?.scope === 'system')
 
 const rows = computed(() => {
   const info = ctx.info
   if (!info) return []
   return [
-    { label: t('context.rowScope'), value: scopeLabel.value },
     { label: t('context.rowHome'), value: info.home },
     { label: t('context.rowConfig'), value: info.config_path },
     { label: t('context.rowLog'), value: info.log_file },
@@ -39,7 +32,11 @@ const rows = computed(() => {
 })
 
 // 复制成纯文本块, 等价于 CLI `ws2tcp status` 的可粘贴形式.
-const asText = computed(() => rows.value.map(r => `${r.label}: ${r.value}`).join('\n'))
+const asText = computed(() => {
+  const lines = [`${t('context.rowScope')}: ${scopeText.value}`]
+  for (const row of rows.value) lines.push(`${row.label}: ${row.value}`)
+  return lines.join('\n')
+})
 
 async function copyAll() {
   const ok = await writeClipboardText(asText.value)
@@ -55,58 +52,199 @@ async function copyAll() {
   <template v-if="ctx.info">
     <button
       type="button"
-      class="badge nowrap context-badge"
-      :class="badgeClass"
+      class="ctx-chip"
+      :class="isSystem ? 'is-system' : 'is-user'"
       :title="t('context.viewDetails')"
       @click="open = true"
     >
-      {{ scopeLabel }}
+      <span class="ctx-chip-dot" />
+      {{ scopeText }}
     </button>
 
-    <Modal :open="open" :title="t('context.title')" width="34rem" @close="open = false">
-      <dl class="context-list">
-        <template v-for="row in rows" :key="row.label">
-          <dt>{{ row.label }}</dt>
-          <dd>{{ row.value }}</dd>
-        </template>
-      </dl>
+    <Modal :open="open" :title="t('context.title')" width="32rem" @close="open = false">
+      <div class="ctx">
+        <div class="ctx-hero">
+          <span class="ctx-scope" :class="isSystem ? 'is-system' : 'is-user'">
+            <span class="ctx-scope-dot" />
+            {{ scopeText }}
+          </span>
+          <span class="ctx-hero-sub">{{ t('context.subtitle') }}</span>
+        </div>
+
+        <dl class="ctx-rows">
+          <div v-for="row in rows" :key="row.label" class="ctx-row">
+            <dt>{{ row.label }}</dt>
+            <dd>{{ row.value }}</dd>
+          </div>
+        </dl>
+      </div>
+
       <template #footer>
-        <IconBtn icon="copy" :title="t('context.copyAll')" @click="copyAll" />
-        <span class="context-copy-hint">{{ t('context.copyAll') }}</span>
+        <button type="button" class="ctx-copy" @click="copyAll">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 9h11v11H9z M5 5h11v3 M5 5v11h3" />
+          </svg>
+          {{ t('context.copyAll') }}
+        </button>
       </template>
     </Modal>
   </template>
 </template>
 
 <style scoped>
-.context-badge {
-  cursor: pointer;
-  border: none;
+/* --- top-bar chip --- */
+.ctx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
   font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.05s ease;
 }
 
-.context-list {
+.ctx-chip-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 22%, transparent);
+}
+
+.ctx-chip.is-system {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+}
+
+.ctx-chip.is-user {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+}
+
+.ctx-chip:hover {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.ctx-chip:active {
+  transform: translateY(1px);
+}
+
+/* --- modal body --- */
+.ctx-hero {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ctx-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.ctx-scope-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.ctx-scope.is-system {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 13%, transparent);
+}
+
+.ctx-scope.is-user {
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+}
+
+.ctx-hero-sub {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.ctx-rows {
+  margin: 0.35rem 0 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ctx-row {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 0.4rem 1rem;
-  margin: 0;
+  grid-template-columns: 6.5rem 1fr;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.62rem 0.5rem;
+  border-radius: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  transition: background 0.12s ease;
 }
 
-.context-list dt {
-  font-weight: 600;
-  opacity: 0.75;
-  white-space: nowrap;
+.ctx-row:last-child {
+  border-bottom: none;
 }
 
-.context-list dd {
+.ctx-row:hover {
+  background: var(--surface-muted);
+}
+
+.ctx-row dt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.ctx-row dd {
   margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.5;
   word-break: break-all;
-  font-family: var(--font-mono, ui-monospace, monospace);
 }
 
-.context-copy-hint {
-  opacity: 0.7;
-  font-size: 0.85em;
-  align-self: center;
+/* --- footer copy button --- */
+.ctx-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ctx-copy svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.ctx-copy:hover {
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
+  color: var(--accent);
 }
 </style>
