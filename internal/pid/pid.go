@@ -143,12 +143,14 @@ func Remove(path string) {
 }
 
 func newBootTimeReader(read func() time.Time) func() time.Time {
-	var once sync.Once
+	var mu sync.Mutex
 	var cached time.Time
 	return func() time.Time {
-		once.Do(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if cached.IsZero() {
 			cached = read()
-		})
+		}
 		return cached
 	}
 }
