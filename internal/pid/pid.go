@@ -23,6 +23,8 @@ import (
 
 var bootTimeNow = systemBootTime
 
+const bootTimeSkewGrace = time.Second
+
 // ErrAlreadyRunning is returned by Acquire when a live ws2tcp process is
 // already holding the PID file.
 type ErrAlreadyRunning struct {
@@ -64,12 +66,7 @@ func Acquire(path string) error {
 			return fmt.Errorf("acquire pid lock: %w", err)
 		}
 		if pidFilePredatesCurrentBoot(path) {
-			_ = os.Remove(path)
-			f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
-			if err != nil {
-				return fmt.Errorf("acquire pid lock after stale removal: %w", err)
-			}
-			goto writePID
+			return acquireAfterStaleRemoval(path, filePerm)
 		}
 		// File already exists — check whether the recorded process is alive.
 		existing, readErr := Read(path)
@@ -82,14 +79,9 @@ func Acquire(path string) error {
 		}
 		// Stale entry: remove and try once more with O_EXCL so that a
 		// concurrent starter that also detected the stale file loses the race.
-		_ = os.Remove(path)
-		f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
-		if err != nil {
-			return fmt.Errorf("acquire pid lock after stale removal: %w", err)
-		}
+		return acquireAfterStaleRemoval(path, filePerm)
 	}
 
-writePID:
 	_, writeErr := fmt.Fprintf(f, "%d\n", os.Getpid())
 	_ = f.Close()
 	return writeErr
@@ -147,6 +139,17 @@ func Remove(path string) {
 	_ = os.Remove(path)
 }
 
+func acquireAfterStaleRemoval(path string, filePerm os.FileMode) error {
+	_ = os.Remove(path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
+	if err != nil {
+		return fmt.Errorf("acquire pid lock after stale removal: %w", err)
+	}
+	_, writeErr := fmt.Fprintf(f, "%d\n", os.Getpid())
+	_ = f.Close()
+	return writeErr
+}
+
 func pidFilePredatesCurrentBoot(path string) bool {
 	boot := bootTimeNow()
 	if boot.IsZero() {
@@ -160,7 +163,9 @@ func pidFilePredatesCurrentBoot(path string) bool {
 	if modTime.IsZero() {
 		return false
 	}
-	return modTime.Before(boot.Add(-time.Second))
+	// Leave a small grace window for filesystem timestamp precision and boot
+	// time rounding so freshly-written post-boot files are not misclassified.
+	return modTime.Before(boot.Add(-bootTimeSkewGrace))
 }
 
 // KnownHomes returns the set of ws2tcp home directories likely to host a
