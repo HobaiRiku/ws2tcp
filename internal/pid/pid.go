@@ -65,7 +65,7 @@ func Acquire(path string) error {
 		if !os.IsExist(err) {
 			return fmt.Errorf("acquire pid lock: %w", err)
 		}
-		// Check for a pre-boot pid file before parsing it so a rebooted host can
+		// Check for a pre-boot pid file before reading it so a rebooted host can
 		// recover even if the file contents are truncated or otherwise unreadable.
 		if pidFilePredatesCurrentBoot(path) {
 			return acquireAfterStaleRemoval(path, filePerm)

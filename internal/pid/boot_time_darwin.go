@@ -13,7 +13,7 @@ func systemBootTime() time.Time {
 	if err != nil {
 		return time.Time{}
 	}
-	// time.Unix expects nanoseconds in its second argument; kern.boottime
-	// reports microseconds, so multiply by 1000.
+	// kern.boottime reports microseconds; time.Unix wants nanoseconds in its
+	// second argument, so convert usec -> nsec with *1000.
 	return time.Unix(int64(tv.Sec), int64(tv.Usec)*1000)
 }
