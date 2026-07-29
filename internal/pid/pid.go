@@ -155,6 +155,7 @@ func acquireAfterStaleRemoval(path string, filePerm os.FileMode) error {
 func pidFilePredatesCurrentBoot(path string) bool {
 	boot := bootTimeNow()
 	if boot.IsZero() {
+		// Unsupported platforms fall back to the legacy "PID is alive" check.
 		return false
 	}
 	info, err := os.Stat(path)
