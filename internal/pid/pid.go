@@ -16,12 +16,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"websocket2Tcp/internal/paths"
 )
 
-var bootTimeNow = systemBootTime
+var bootTimeNow = newBootTimeReader(systemBootTime)
 
 const bootTimeSkewGrace = time.Second
 
@@ -141,6 +142,17 @@ func Remove(path string) {
 	_ = os.Remove(path)
 }
 
+func newBootTimeReader(read func() time.Time) func() time.Time {
+	var once sync.Once
+	var cached time.Time
+	return func() time.Time {
+		once.Do(func() {
+			cached = read()
+		})
+		return cached
+	}
+}
+
 func acquireAfterStaleRemoval(path string, filePerm os.FileMode) error {
 	_ = os.Remove(path)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
@@ -166,8 +178,9 @@ func pidFilePredatesCurrentBoot(path string) bool {
 	if modTime.IsZero() {
 		return false
 	}
-	// Leave a small grace window for filesystem timestamp precision and boot
-	// time rounding so freshly-written post-boot files are not misclassified.
+	// Only classify files that are safely older than the reported boot time.
+	// This tolerates small boot-time rounding/estimation errors without
+	// misclassifying a freshly-written post-boot pid file as stale.
 	return modTime.Before(boot.Add(-bootTimeSkewGrace))
 }
 
