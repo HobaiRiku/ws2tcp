@@ -16,9 +16,15 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"websocket2Tcp/internal/paths"
 )
+
+var bootTimeNow = newBootTimeReader(systemBootTime)
+
+const bootTimeSkewGrace = time.Second
 
 // ErrAlreadyRunning is returned by Acquire when a live ws2tcp process is
 // already holding the PID file.
@@ -60,6 +66,11 @@ func Acquire(path string) error {
 		if !os.IsExist(err) {
 			return fmt.Errorf("acquire pid lock: %w", err)
 		}
+		// Check for a pre-boot pid file before reading it so a rebooted host can
+		// recover even if the file contents are truncated or otherwise unreadable.
+		if pidFilePredatesCurrentBoot(path) {
+			return acquireAfterStaleRemoval(path, filePerm)
+		}
 		// File already exists — check whether the recorded process is alive.
 		existing, readErr := Read(path)
 		if readErr == nil && IsAlive(existing) {
@@ -71,11 +82,7 @@ func Acquire(path string) error {
 		}
 		// Stale entry: remove and try once more with O_EXCL so that a
 		// concurrent starter that also detected the stale file loses the race.
-		_ = os.Remove(path)
-		f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
-		if err != nil {
-			return fmt.Errorf("acquire pid lock after stale removal: %w", err)
-		}
+		return acquireAfterStaleRemoval(path, filePerm)
 	}
 
 	_, writeErr := fmt.Fprintf(f, "%d\n", os.Getpid())
@@ -133,6 +140,50 @@ func Read(path string) (int, error) {
 // Remove deletes path, ignoring not-exist errors.
 func Remove(path string) {
 	_ = os.Remove(path)
+}
+
+func newBootTimeReader(read func() time.Time) func() time.Time {
+	var mu sync.Mutex
+	var cached time.Time
+	return func() time.Time {
+		mu.Lock()
+		defer mu.Unlock()
+		if cached.IsZero() {
+			cached = read()
+		}
+		return cached
+	}
+}
+
+func acquireAfterStaleRemoval(path string, filePerm os.FileMode) error {
+	_ = os.Remove(path)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
+	if err != nil {
+		return fmt.Errorf("acquire pid lock after stale removal: %w", err)
+	}
+	_, writeErr := fmt.Fprintf(f, "%d\n", os.Getpid())
+	_ = f.Close()
+	return writeErr
+}
+
+func pidFilePredatesCurrentBoot(path string) bool {
+	boot := bootTimeNow()
+	if boot.IsZero() {
+		// Unsupported platforms fall back to the legacy "PID is alive" check.
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	modTime := info.ModTime()
+	if modTime.IsZero() {
+		return false
+	}
+	// Only classify files that are safely older than the reported boot time.
+	// This tolerates small boot-time rounding/estimation errors without
+	// misclassifying a freshly-written post-boot pid file as stale.
+	return modTime.Before(boot.Add(-bootTimeSkewGrace))
 }
 
 // KnownHomes returns the set of ws2tcp home directories likely to host a
