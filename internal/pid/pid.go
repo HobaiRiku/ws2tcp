@@ -16,9 +16,12 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"websocket2Tcp/internal/paths"
 )
+
+var bootTimeNow = systemBootTime
 
 // ErrAlreadyRunning is returned by Acquire when a live ws2tcp process is
 // already holding the PID file.
@@ -60,6 +63,14 @@ func Acquire(path string) error {
 		if !os.IsExist(err) {
 			return fmt.Errorf("acquire pid lock: %w", err)
 		}
+		if pidFilePredatesCurrentBoot(path) {
+			_ = os.Remove(path)
+			f, err = os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, filePerm)
+			if err != nil {
+				return fmt.Errorf("acquire pid lock after stale removal: %w", err)
+			}
+			goto writePID
+		}
 		// File already exists — check whether the recorded process is alive.
 		existing, readErr := Read(path)
 		if readErr == nil && IsAlive(existing) {
@@ -78,6 +89,7 @@ func Acquire(path string) error {
 		}
 	}
 
+writePID:
 	_, writeErr := fmt.Fprintf(f, "%d\n", os.Getpid())
 	_ = f.Close()
 	return writeErr
@@ -133,6 +145,22 @@ func Read(path string) (int, error) {
 // Remove deletes path, ignoring not-exist errors.
 func Remove(path string) {
 	_ = os.Remove(path)
+}
+
+func pidFilePredatesCurrentBoot(path string) bool {
+	boot := bootTimeNow()
+	if boot.IsZero() {
+		return false
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	modTime := info.ModTime()
+	if modTime.IsZero() {
+		return false
+	}
+	return modTime.Before(boot.Add(-time.Second))
 }
 
 // KnownHomes returns the set of ws2tcp home directories likely to host a

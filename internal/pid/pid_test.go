@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"testing"
+	"time"
 
 	"websocket2Tcp/internal/paths"
 )
@@ -151,6 +152,59 @@ func TestAcquire_busy(t *testing.T) {
 	}
 	if alreadyRunning.PID != os.Getpid() {
 		t.Fatalf("ErrAlreadyRunning.PID = %d, want %d", alreadyRunning.PID, os.Getpid())
+	}
+}
+
+func TestAcquire_reusedPIDFromPriorBootIsTreatedAsStale(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ws2tcp.pid")
+
+	boot := time.Now().Add(-30 * time.Minute)
+	fileTime := boot.Add(-2 * time.Minute)
+	origBootTimeNow := bootTimeNow
+	bootTimeNow = func() time.Time { return boot }
+	defer func() { bootTimeNow = origBootTimeNow }()
+
+	if err := Write(path, os.Getpid()); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := os.Chtimes(path, fileTime, fileTime); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+
+	if err := Acquire(path); err != nil {
+		t.Fatalf("Acquire should discard pre-boot pid file: %v", err)
+	}
+	defer Release(path)
+}
+
+func TestPIDFilePredatesCurrentBoot(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "ws2tcp.pid")
+
+	boot := time.Now().Add(-10 * time.Minute)
+	origBootTimeNow := bootTimeNow
+	bootTimeNow = func() time.Time { return boot }
+	defer func() { bootTimeNow = origBootTimeNow }()
+
+	if err := Write(path, os.Getpid()); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+
+	oldTime := boot.Add(-2 * time.Minute)
+	if err := os.Chtimes(path, oldTime, oldTime); err != nil {
+		t.Fatalf("Chtimes old: %v", err)
+	}
+	if !pidFilePredatesCurrentBoot(path) {
+		t.Fatal("expected pid file older than boot time to be treated as stale")
+	}
+
+	newTime := boot.Add(2 * time.Minute)
+	if err := os.Chtimes(path, newTime, newTime); err != nil {
+		t.Fatalf("Chtimes new: %v", err)
+	}
+	if pidFilePredatesCurrentBoot(path) {
+		t.Fatal("expected pid file newer than boot time to stay valid")
 	}
 }
 
