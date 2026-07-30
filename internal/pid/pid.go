@@ -73,11 +73,17 @@ func Acquire(path string) error {
 		}
 		// File already exists — check whether the recorded process is alive.
 		existing, readErr := Read(path)
-		if readErr == nil && IsAlive(existing) {
-			return ErrAlreadyRunning{
-				PID:     existing,
-				Home:    filepath.Dir(path),
-				PIDFile: path,
+		if readErr == nil {
+			// If we can verify the running process actually corresponds to the
+			// pid file (by checking start time on Linux), treat it as already
+			// running. If start-time verification fails or is inconclusive we
+			// fall back to the legacy IsAlive check.
+			if procMatchesPidFile(existing, path) {
+				return ErrAlreadyRunning{
+					PID:     existing,
+					Home:    filepath.Dir(path),
+					PIDFile: path,
+				}
 			}
 		}
 		// Stale entry: remove and try once more with O_EXCL so that a
