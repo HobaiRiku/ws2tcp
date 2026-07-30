@@ -192,6 +192,34 @@ func pidFilePredatesCurrentBoot(path string) bool {
 	return modTime.Before(boot.Add(-bootTimeSkewGrace))
 }
 
+// procMatchesPidFile returns true when the pid is alive and, where supported,
+// the process start time appears consistent with the pid file's modification
+// time. On platforms where start-time cannot be read this falls back to the
+// legacy IsAlive check.
+func procMatchesPidFile(pid int, path string) bool {
+	if !IsAlive(pid) {
+		return false
+	}
+	// Try platform-specific start-time verification when available.
+	procStart, ok := procStartTime(pid)
+	if !ok || procStart.IsZero() {
+		// Inconclusive — assume alive is sufficient.
+		return true
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	mod := info.ModTime()
+	// If the process started significantly after the pid file was written,
+	// it's likely a PID-reuse case and not the original process that created
+	// the pid file.
+	if procStart.After(mod.Add(bootTimeSkewGrace)) {
+		return false
+	}
+	return true
+}
+
 // KnownHomes returns the set of ws2tcp home directories likely to host a
 // PID file: WS2TCP_HOME (if set), the per-user default (~/.ws2tcp), and the
 // platform system home. systemHome is passed in by callers that already know
