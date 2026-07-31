@@ -73,11 +73,17 @@ func Acquire(path string) error {
 		}
 		// File already exists — check whether the recorded process is alive.
 		existing, readErr := Read(path)
-		if readErr == nil && IsAlive(existing) {
-			return ErrAlreadyRunning{
-				PID:     existing,
-				Home:    filepath.Dir(path),
-				PIDFile: path,
+		if readErr == nil {
+			// If we can verify the running process actually corresponds to the
+			// pid file (by checking start time on Linux), treat it as already
+			// running. If start-time verification fails or is inconclusive we
+			// fall back to the legacy IsAlive check.
+			if procMatchesPidFile(existing, path) {
+				return ErrAlreadyRunning{
+					PID:     existing,
+					Home:    filepath.Dir(path),
+					PIDFile: path,
+				}
 			}
 		}
 		// Stale entry: remove and try once more with O_EXCL so that a
@@ -184,6 +190,34 @@ func pidFilePredatesCurrentBoot(path string) bool {
 	// This tolerates small boot-time rounding/estimation errors without
 	// misclassifying a freshly-written post-boot pid file as stale.
 	return modTime.Before(boot.Add(-bootTimeSkewGrace))
+}
+
+// procMatchesPidFile returns true when the pid is alive and, where supported,
+// the process start time appears consistent with the pid file's modification
+// time. On platforms where start-time cannot be read this falls back to the
+// legacy IsAlive check.
+func procMatchesPidFile(pid int, path string) bool {
+	if !IsAlive(pid) {
+		return false
+	}
+	// Try platform-specific start-time verification when available.
+	procStart, ok := procStartTime(pid)
+	if !ok || procStart.IsZero() {
+		// Inconclusive — assume alive is sufficient.
+		return true
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return true
+	}
+	mod := info.ModTime()
+	// If the process started significantly after the pid file was written,
+	// it's likely a PID-reuse case and not the original process that created
+	// the pid file.
+	if procStart.After(mod.Add(bootTimeSkewGrace)) {
+		return false
+	}
+	return true
 }
 
 // KnownHomes returns the set of ws2tcp home directories likely to host a
