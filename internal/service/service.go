@@ -62,6 +62,10 @@ func New(home string) (kservice.Service, *Program, error) {
 		},
 		Option: kservice.KeyValue{},
 	}
+	// Ensure launchd writes logs under the ws2tcp home logs/ directory instead of
+	// littering the user's $HOME root. kardianos/service uses the "LogDirectory"
+	// option to set StandardOutPath/StandardErrorPath on macOS launchd.
+	cfg.Option["LogDirectory"] = resolved.Logs()
 	// macOS 用 per-user launchd agent（避免 system 域 SIP 限制 + launchctl bootstrap
 	// 行为差异）。Linux 用系统级 systemd unit，配 root 跑、开机自启更自然。
 	if runtime.GOOS == "darwin" {
