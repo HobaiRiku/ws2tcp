@@ -29,7 +29,7 @@ func configShowCmd() *cobra.Command {
 		Use:   "show",
 		Short: "Print the raw config.yaml",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			p, err := paths.Resolve(rootFlags.Home)
+			p, err := paths.ResolveScope(rootFlags.Home, rootScope())
 			if err != nil {
 				return err
 			}
@@ -48,7 +48,7 @@ func configPathCmd() *cobra.Command {
 		Use:   "path",
 		Short: "Print the absolute config.yaml path",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			p, err := paths.Resolve(rootFlags.Home)
+			p, err := paths.ResolveScope(rootFlags.Home, rootScope())
 			if err != nil {
 				return err
 			}

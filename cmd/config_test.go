@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"websocket2Tcp/internal/paths"
 )
 
 func TestConfigShowPathSetAndClientAuth(t *testing.T) {
@@ -46,6 +48,21 @@ func TestConfigShowPathSetAndClientAuth(t *testing.T) {
 	}
 	if cfg.Client.Clients[0].ClientID != "u2" || cfg.Client.Clients[0].ClientSecret != "s2" {
 		t.Fatalf("unexpected client auth: %+v", cfg.Client.Clients[0])
+	}
+}
+
+func TestConfigPathDefaultsToSystemScope(t *testing.T) {
+	// 不传 --home / --user / WS2TCP_HOME 时, inspect 命令必须与 install/start/stop
+	// 一致地落到 system home, 而不是 user home. 否则会读到与运行中服务不同的 config.
+	t.Setenv("WS2TCP_HOME", "")
+
+	out, err := executeRoot(t, "config", "path")
+	if err != nil {
+		t.Fatalf("config path returned error: %v", err)
+	}
+	want := filepath.Join(paths.SystemHome(), "config.yaml")
+	if strings.TrimSpace(out) != want {
+		t.Fatalf("expected system-home config path %q, got %q", want, out)
 	}
 }
 
