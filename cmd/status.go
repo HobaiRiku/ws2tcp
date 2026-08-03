@@ -30,7 +30,10 @@ func statusCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("get service status scope=%s home=%s: %w", scope, p.Home, err)
 			}
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "scope: %s\nhome: %s\nstatus: %s\n", scope, p.Home, statusString(status))
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(),
+				"scope:  %s\nhome:   %s\nconfig: %s\nlog:    %s\nstatus: %s\n",
+				scope, p.Home, p.Config(), p.LogFile(), statusString(status),
+			)
 			return nil
 		},
 	}

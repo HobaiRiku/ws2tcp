@@ -19,6 +19,7 @@ func configCmd() *cobra.Command {
 		configPathCmd(),
 		configSetCmd(),
 		configClientAuthCmd(),
+		configTokenCmd(),
 	)
 	return config
 }
@@ -115,4 +116,19 @@ func configClientAuthSetCmd() *cobra.Command {
 	_ = cmd.MarkFlagRequired("client-id")
 	_ = cmd.MarkFlagRequired("client-secret")
 	return cmd
+}
+
+func configTokenCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "token",
+		Short: "Print the current HTTP management API token",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), cfg.App.HTTPToken)
+			return nil
+		},
+	}
 }
