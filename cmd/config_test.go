@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -45,5 +46,28 @@ func TestConfigShowPathSetAndClientAuth(t *testing.T) {
 	}
 	if cfg.Client.Clients[0].ClientID != "u2" || cfg.Client.Clients[0].ClientSecret != "s2" {
 		t.Fatalf("unexpected client auth: %+v", cfg.Client.Clients[0])
+	}
+}
+
+func TestConfigToken(t *testing.T) {
+	home := t.TempDir()
+	raw := `app:
+  http_listen: "127.0.0.1:7321"
+  http_auth: true
+  http_token: "mysecrettoken"
+  log_level: info
+server:
+  enabled: false
+`
+	if err := os.WriteFile(filepath.Join(home, "config.yaml"), []byte(raw), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := executeRoot(t, "--home", home, "config", "token")
+	if err != nil {
+		t.Fatalf("config token returned error: %v", err)
+	}
+	if strings.TrimSpace(out) != "mysecrettoken" {
+		t.Fatalf("unexpected token output: %q", out)
 	}
 }

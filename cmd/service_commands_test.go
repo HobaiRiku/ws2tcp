@@ -84,7 +84,8 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("status returned error: %v", err)
 		}
-		if out != "scope: system\nhome: /tmp/ws2tcp-home\nstatus: running\n" {
+		want := "scope:  system\nhome:   /tmp/ws2tcp-home\nconfig: /tmp/ws2tcp-home/config.yaml\nlog:    /tmp/ws2tcp-home/logs/ws2tcp.log\nstatus: running\n"
+		if out != want {
 			t.Fatalf("unexpected output %q", out)
 		}
 	})
@@ -99,7 +100,8 @@ func TestServiceLifecycleCommands(t *testing.T) {
 		if err != nil {
 			t.Fatalf("status returned error: %v", err)
 		}
-		if out != "scope: user\nhome: /tmp/ws2tcp-home\nstatus: stopped\n" {
+		want := "scope:  user\nhome:   /tmp/ws2tcp-home\nconfig: /tmp/ws2tcp-home/config.yaml\nlog:    /tmp/ws2tcp-home/logs/ws2tcp.log\nstatus: stopped\n"
+		if out != want {
 			t.Fatalf("unexpected output %q", out)
 		}
 	})
