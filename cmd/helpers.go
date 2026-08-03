@@ -14,7 +14,7 @@ import (
 )
 
 func loadConfigAndRegistry() (*config.Config, *services.Registry, error) {
-	p, err := paths.Resolve(rootFlags.Home)
+	p, err := paths.ResolveScope(rootFlags.Home, rootScope())
 	if err != nil {
 		return nil, nil, err
 	}
