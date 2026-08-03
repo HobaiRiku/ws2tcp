@@ -8,20 +8,26 @@ import (
 	"time"
 
 	kservice "github.com/kardianos/service"
+
+	"websocket2Tcp/internal/config"
+	"websocket2Tcp/internal/paths"
 )
 
 func TestProgramStartStopLifecycle(t *testing.T) {
+	// Use a real temp dir so the PID file can be written.
+	home := t.TempDir()
+
 	started := make(chan struct{})
 	stopped := make(chan struct{})
 
 	p := &Program{
-		home: "/tmp/ws2tcp-test",
-		run: func(ctx context.Context, home string, console bool) error {
-			if home != "/tmp/ws2tcp-test" {
-				t.Fatalf("home = %q, want %q", home, "/tmp/ws2tcp-test")
+		home: home,
+		run: func(ctx context.Context, gotHome string, console bool) error {
+			if gotHome != home {
+				t.Errorf("home = %q, want %q", gotHome, home)
 			}
 			if console {
-				t.Fatal("service run should disable console logging")
+				t.Error("service run should disable console logging")
 			}
 			close(started)
 			<-ctx.Done()
@@ -40,6 +46,7 @@ func TestProgramStartStopLifecycle(t *testing.T) {
 		t.Fatal("program did not start")
 	}
 
+	// Second Start must fail (PID file is held by first Start).
 	if err := p.Start(nil); err == nil {
 		t.Fatal("second Start() unexpectedly succeeded")
 	}
@@ -52,6 +59,11 @@ func TestProgramStartStopLifecycle(t *testing.T) {
 	case <-stopped:
 	case <-time.After(2 * time.Second):
 		t.Fatal("program did not stop")
+	}
+
+	// After Stop, PID file must be removed.
+	if _, err := os.Stat(filepath.Join(home, "ws2tcp.pid")); !os.IsNotExist(err) {
+		t.Fatal("pid file should be removed after Stop")
 	}
 }
 
@@ -93,5 +105,22 @@ func TestLoadOptionsInitializesMissingConfig(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "config.yaml")); err != nil {
 		t.Fatalf("expected initialized config file: %v", err)
+	}
+}
+
+func TestEnsureHomeAndConfigCreatesExample(t *testing.T) {
+	home := t.TempDir()
+	p := paths.Paths{Home: home}
+
+	if err := ensureHomeAndConfig(p); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(p.Config())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.App.HTTPToken == "" {
+		t.Fatal("expected initialized http_token")
 	}
 }

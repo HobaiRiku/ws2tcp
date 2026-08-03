@@ -137,6 +137,8 @@ func runAPI(ctx context.Context, opts Options, reg *services.Registry, rt *servi
 		RequireAuth:   opts.Config.App.HTTPAuth,
 		Logger:        opts.Logger.With("component", "api"),
 		ServerControl: supervisor,
+		Scope:         opts.Paths.Scope(),
+		Home:          opts.Paths.Home,
 	})
 	web.Mount(router)
 

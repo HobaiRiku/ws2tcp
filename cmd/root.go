@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"websocket2Tcp/internal/paths"
 	"websocket2Tcp/internal/version"
 )
 
@@ -14,6 +15,17 @@ import (
 // pointer at registration time.
 var rootFlags struct {
 	Home string
+	User bool
+}
+
+// rootScope returns the service scope selected by the current flags.
+// System is the default on every platform; --user opts into the per-user
+// install (the flag is not registered on Windows, so User stays false there).
+func rootScope() string {
+	if rootFlags.User {
+		return paths.ScopeUser
+	}
+	return paths.ScopeSystem
 }
 
 // Root returns the root cobra command, fully wired with subcommands.
@@ -35,7 +47,11 @@ func Root() *cobra.Command {
 		},
 	}
 	root.PersistentFlags().StringVar(&rootFlags.Home, "home", "",
-		"override WS2TCP_HOME (default $HOME/.ws2tcp)")
+		"override WS2TCP_HOME; if unset, defaults to the system home (e.g. /var/lib/ws2tcp), or the per-user home ($HOME/.ws2tcp) when --user is set")
+	// System scope is the default on every platform; --user (registered per
+	// platform below) opts into a per-user install. Windows has no user scope,
+	// so the flag is omitted there.
+	registerScopeFlags(root)
 	root.Flags().BoolP("version", "v", false, "print version and exit")
 
 	root.AddCommand(

@@ -106,6 +106,8 @@ make build               # output: build/bin/ws2tcp (with embedded Web UI)
 
 Build requirements: Go 1.23+, `pnpm` (or `corepack enable`), `make`.
 
+GitHub Actions runs the frontend-related jobs with Node 24 and `pnpm@9.15.0`.
+
 ---
 
 ## Configuration example
@@ -278,7 +280,7 @@ make ui-typecheck    # frontend type check
 make ui-lint         # frontend lint
 ```
 
-GitHub Actions runs tests, frontend checks, and a release build validation on every `push` / `pull_request`. Pushing a `v*` tag (e.g. `v0.1.0`) triggers GoReleaser: publishes a GitHub Release with multi-platform artifacts and auto-generated changelog, and commits the updated Homebrew cask to the tap.
+GitHub Actions runs tests, frontend checks, and a release build validation on every `push` / `pull_request`. The frontend-related CI and release jobs pin Node 24 plus `pnpm@9.15.0`. Pushing a `v*` tag (e.g. `v0.1.0`) triggers GoReleaser: publishes a GitHub Release with multi-platform artifacts and auto-generated changelog, and commits the updated Homebrew cask to the tap.
 
 To skip CI for a commit, include `[skip ci]` in the commit message:
 

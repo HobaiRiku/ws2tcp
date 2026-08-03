@@ -4,6 +4,8 @@ node_modules
 
 # Go
 /bin/
+# GoReleaser 产物; release --clean 会重建, 提交进仓会让 goreleaser 判定 git dirty 而中止发布
+/dist/
 *.exe
 *.test
 *.out

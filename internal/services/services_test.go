@@ -60,6 +60,11 @@ func newStoredRegistry(t *testing.T) (*Registry, paths.Paths) {
 	listenProbe = func(string) error { return nil }
 	t.Cleanup(func() { listenProbe = previous })
 
+	// Stub the port-conflict warner to suppress slog noise in tests.
+	prevWarn := warnPortConflict
+	warnPortConflict = func(string) {}
+	t.Cleanup(func() { warnPortConflict = prevWarn })
+
 	p, err := paths.Resolve(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
