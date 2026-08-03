@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"sync"
+	"runtime"
 
 	kservice "github.com/kardianos/service"
 
@@ -80,13 +81,16 @@ func New(home, scope string) (kservice.Service, *Program, error) {
 	// Ensure launchd writes logs under the ws2tcp home logs/ directory instead of
 	// littering the user's $HOME root. kardianos/service uses the "LogDirectory"
 	// option to set StandardOutPath/StandardErrorPath on macOS launchd.
-	cfg.Option["LogDirectory"] = resolved.Logs()
+	if runtime.GOOS == "darwin" {
+		cfg.Option["LogDirectory"] = resolved.Logs()
+	}
 	// User scope → per-user service manager agent (launchd agent on macOS,
 	// systemd user unit on Linux, session service on Windows).
 	// System scope → system-level daemon; UserService stays false.
 	if scope == paths.ScopeUser {
 		cfg.Option["UserService"] = true
 	}
+
 	svc, err := kservice.New(p, cfg)
 	if err != nil {
 		return nil, nil, err
