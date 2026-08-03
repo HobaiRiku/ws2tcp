@@ -1,29 +1,50 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	kservice "github.com/kardianos/service"
+
+	"websocket2Tcp/internal/paths"
 )
 
 // macOS launchd helpers. kardianos/service still drives `launchctl load -w`,
 // which is the legacy API and emits the famously vague "Input/output error"
 // whenever launchd has any stale cached state for the same label (common when
 // switching between system daemon and user agent installs). These wrappers use
-// the modern bootstrap/bootout/kickstart API in the gui/<uid> domain so install
-// is self-healing and start/stop don't fail on cache mismatches.
+// the modern bootstrap/bootout/kickstart API so install is self-healing and
+// start/stop don't fail on cache mismatches.
+//
+// Scope determines the launchd domain:
+//   - user  → gui/<uid>      (LaunchAgent in ~/Library/LaunchAgents)
+//   - system → system/       (LaunchDaemon in /Library/LaunchDaemons)
 
-func darwinUserDomain() string {
+func darwinDomain(scope string) string {
+	if scope == paths.ScopeSystem {
+		return "system"
+	}
+	if sudoUID := os.Getenv("SUDO_UID"); sudoUID != "" {
+		if uid, err := strconv.Atoi(sudoUID); err == nil && uid > 0 {
+			return fmt.Sprintf("gui/%d", uid)
+		}
+	}
 	return fmt.Sprintf("gui/%d", os.Getuid())
 }
 
-func darwinServiceTarget() string {
-	return fmt.Sprintf("%s/%s", darwinUserDomain(), serviceName)
+func darwinServiceTarget(scope string) string {
+	return fmt.Sprintf("%s/%s", darwinDomain(scope), serviceName)
 }
 
-func darwinPlistPath() (string, error) {
+func darwinPlistPath(scope string) (string, error) {
+	if scope == paths.ScopeSystem {
+		return filepath.Join("/Library", "LaunchDaemons", serviceName+".plist"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -31,36 +52,51 @@ func darwinPlistPath() (string, error) {
 	return filepath.Join(home, "Library", "LaunchAgents", serviceName+".plist"), nil
 }
 
-func darwinBootout() {
+func darwinBootout(scope string) {
 	// Idempotent best-effort: ignore "service not found" — we just want to
 	// guarantee any stale registration is gone.
-	_ = exec.Command("launchctl", "bootout", darwinServiceTarget()).Run()
+	_ = exec.Command("launchctl", "bootout", darwinServiceTarget(scope)).Run()
 }
 
-func darwinBootstrap() error {
-	plist, err := darwinPlistPath()
+func darwinBootstrap(scope string) error {
+	plist, err := darwinPlistPath(scope)
 	if err != nil {
 		return fmt.Errorf("locate plist: %w", err)
 	}
-	out, err := exec.Command("launchctl", "bootstrap", darwinUserDomain(), plist).CombinedOutput()
+	out, err := exec.Command("launchctl", "bootstrap", darwinDomain(scope), plist).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("launchctl bootstrap: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return nil
 }
 
-func darwinKickstart() (bool, error) {
-	out, err := exec.Command("launchctl", "kickstart", darwinServiceTarget()).CombinedOutput()
+func darwinKickstart(scope string) (bool, error) {
+	out, err := exec.Command("launchctl", "kickstart", darwinServiceTarget(scope)).CombinedOutput()
 	if err != nil {
 		return true, fmt.Errorf("launchctl kickstart: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return true, nil
 }
 
-func darwinKill() (bool, error) {
-	out, err := exec.Command("launchctl", "kill", "SIGTERM", darwinServiceTarget()).CombinedOutput()
+func darwinKill(scope string) (bool, error) {
+	out, err := exec.Command("launchctl", "kill", "SIGTERM", darwinServiceTarget(scope)).CombinedOutput()
 	if err != nil {
 		return true, fmt.Errorf("launchctl kill: %s: %w", strings.TrimSpace(string(out)), err)
 	}
 	return true, nil
+}
+
+func darwinStatus(scope string) (bool, kservice.Status, error) {
+	out, err := exec.Command("launchctl", "print", darwinServiceTarget(scope)).CombinedOutput()
+	text := strings.TrimSpace(string(out))
+	if err != nil {
+		if strings.Contains(text, "Could not find service") {
+			return true, kservice.StatusUnknown, errors.New("the service is not installed")
+		}
+		return true, kservice.StatusUnknown, fmt.Errorf("launchctl print: %s: %w", text, err)
+	}
+	if strings.Contains(text, "state = running") {
+		return true, kservice.StatusRunning, nil
+	}
+	return true, kservice.StatusStopped, nil
 }

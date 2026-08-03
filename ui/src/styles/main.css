@@ -717,19 +717,59 @@ textarea.text-area {
   color: var(--danger);
 }
 
-/* AppShell 顶栏 fluent-select 比较"胖", 这里收紧到 32px 高度对齐其它图标按钮. */
-.locale-select {
-  min-width: 86px;
-  --neutral-fill-input-rest: var(--surface);
-  --neutral-fill-input-hover: var(--surface);
-  --neutral-fill-input-active: var(--surface);
+/* AppShell 顶栏语言切换: 原生 select 收成 32px 药丸, 完全走主题变量,
+ * 跟旁边的 badge / IconBtn 一套视觉; fluent-select 的内建配色在 dark 下和
+ * 其它自定义样式的顶栏元素对不上, 所以这里不用组件库那套. */
+.locale-field {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
 }
-.locale-select::part(control) {
+
+.locale-select {
   height: 32px;
-  min-height: 32px;
+  min-width: 86px;
+  border: 1px solid var(--border);
   border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
   font-size: 0.85rem;
-  padding: 0 0.7rem;
+  /* 右侧留出自绘 chevron 的位置 */
+  padding: 0 1.9rem 0 0.8rem;
+  cursor: pointer;
+  appearance: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.locale-select:hover {
+  border-color: var(--accent);
+}
+
+.locale-select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+/* chevron 用 mask + currentColor 派生, 两种模式都跟文字同色, 不像原生箭头那样撞色 */
+.locale-field::after {
+  content: '';
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  transform: translateY(-50%);
+  pointer-events: none;
+  background: var(--text-muted);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2.5 4.5 6 8l3.5-3.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* 下拉展开项跟随系统 dark, 顺带把 option 底色对齐 surface (部分浏览器会读这个) */
+.locale-select option {
+  background: var(--surface);
+  color: var(--text);
 }
 
 /* fluent-text-field / fluent-text-area 的 mono class 让内部 control 走等宽字体,
