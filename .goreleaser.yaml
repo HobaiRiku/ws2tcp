@@ -109,9 +109,17 @@ homebrew_casks:
       name: github-actions[bot]
       email: 41898282+github-actions[bot]@users.noreply.github.com
     commit_msg_template: "brew: update ws2tcp cask to {{ .Tag }}"
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ws2tcp"]
-          end
+    # Homebrew 7.0 弃用了 postflight (2027-12-11 起变 error), 而 GoReleaser 把
+    # `postflight do` 硬编码在 hooks.post.install 外层, 配置层改不掉; 在 goreleaser#6873
+    # 的 hooks.post.install_steps 随 v2.19 发布前, 只能用 custom_block 直接注入 stanza。
+    # steps 块内是声明式 DSL: system_command→run, #{staged_path}→{{staged_path}} 字面
+    # token (外层 {{ "..." }} 是躲开 GoReleaser 自己的 Go 模板), must_succeed: false
+    # 保留 system_command 原本容忍非零退出的行为 (缺 quarantine 属性时 xattr 会报错)。
+    custom_block: |
+      postflight_steps do
+        on_macos do
+          run "/usr/bin/xattr",
+              args: ["-dr", "com.apple.quarantine", "{{ "{{staged_path}}" }}/ws2tcp"],
+              must_succeed: false
+        end
+      end
