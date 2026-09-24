@@ -172,6 +172,9 @@ a {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  /* 面板高度被锁在视口内, Clients 等 .page 内容一长就会溢出边框;
+   * 在面板内部滚动. dashboard 自己 min-height:0 接管内部滚动, 不受影响. */
+  overflow: auto;
 }
 
 .shell-footer {
