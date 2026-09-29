@@ -1,10 +1,8 @@
 name: CI
 
 on:
+  # 只在 PR 上跑, 直推 main 不触发, 节省 Actions 用量
   pull_request:
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
